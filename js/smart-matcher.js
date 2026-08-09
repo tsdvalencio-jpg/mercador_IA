@@ -79,7 +79,7 @@
   };
 
   M.scorePromotionMatch = function scorePromotionMatch(item, promo) {
-    const itemName = M.normalizeText(item.name || '');
+    const itemName = M.normalizeText(item.name || item.nome || '');
     const promoText = M.normalizeText([
       promo.productName,
       promo.brand,
@@ -89,7 +89,7 @@
 
     if (!itemName || !promoText) return { score: 0, reason: 'sem_texto' };
 
-    const itemCategory = item.category || M.inferCategory(item.name);
+    const itemCategory = item.category || M.inferCategory(item.name || item.nome);
     const promoCategory = promo.category || M.inferCategory(promoText);
 
     if (itemCategory && promoCategory && itemCategory !== promoCategory) {
@@ -155,7 +155,7 @@
       if (!Number.isFinite(distanceKm) || distanceKm > Number(radiusKm)) continue;
 
       for (const item of items) {
-        if (item.status !== 'pending') continue;
+        if (!['pending','faltando'].includes(item.status)) continue;
         const match = M.scorePromotionMatch(item, promo);
         if (match.score < 0.58) continue;
         offers.push({
@@ -172,7 +172,7 @@
     }
 
     return offers.sort((a, b) => {
-      if (a.item.id !== b.item.id) return String(a.item.name).localeCompare(String(b.item.name));
+      if (a.item.id !== b.item.id) return String(a.item.name || a.item.nome || '').localeCompare(String(b.item.name || b.item.nome || '')); 
       const priceDiff = Number(a.promo.price) - Number(b.promo.price);
       if (Math.abs(priceDiff) > 0.001) return priceDiff;
       return a.distanceKm - b.distanceKm;

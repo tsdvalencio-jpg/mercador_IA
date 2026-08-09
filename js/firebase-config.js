@@ -13,7 +13,7 @@
 
   const MASTER_UID = 'Ah16jHtjZTgSVBzgL759FnQl5W73';
   const MASTER_EMAIL = 'tsd.valencio@gmail.com';
-  const APP_VERSION = '1.0.0';
+  const APP_VERSION = '1.2.0';
 
   if (!window.firebase) {
     throw new Error('Firebase SDK não carregado.');
@@ -22,14 +22,21 @@
   const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
 
   window.MercadorIA = window.MercadorIA || {};
+  const auth = firebase.auth();
+  const db = firebase.database();
+
   Object.assign(window.MercadorIA, {
     firebaseConfig,
     MASTER_UID,
     MASTER_EMAIL,
     APP_VERSION,
     app,
-    auth: firebase.auth(),
-    db: firebase.database(),
+    auth,
+    db,
     serverTimestamp: firebase.database.ServerValue.TIMESTAMP
   });
+
+  // Compatibilidade intencional com a Lista Inteligente original migrada para o Mercador IA.
+  window.auth = auth;
+  window.database = db;
 })();
