@@ -13,10 +13,10 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
     
-    <script src="./js/firebase-config.js?v=1.2.0"></script>
-    <script src="./js/utils.js?v=1.2.0"></script>
-    <script src="./js/auth.js?v=1.2.0"></script>
-    <script src="./js/smart-matcher.js?v=1.2.0"></script>
+    <script src="./js/firebase-config.js?v=1.3.0"></script>
+    <script src="./js/utils.js?v=1.3.0"></script>
+    <script src="./js/auth.js?v=1.3.0"></script>
+    <script src="./js/smart-matcher.js?v=1.3.0"></script>
 
     <style>
         :root {
@@ -110,6 +110,98 @@
             .header-section{padding:14px 20px}.main-content{padding:20px}.calculator-footer{padding-left:20px;padding-right:20px}
             .top-bar h1{font-size:1.35rem}#header-total{font-size:1.65rem}.item-row,.report-item{padding:13px 15px}.item-name,.report-date{font-size:1.15rem}
         }
+
+        /* === MERCADOR IA V1.3 — CHECKOUT INTELIGENTE ===
+           Camada de UX sobre a lista original. Não remove calculadora, relatórios,
+           estados nem persistência da V1.2. */
+        *,*::before,*::after{box-sizing:border-box}
+        html,body{width:100%;max-width:100vw;overflow-x:hidden;overscroll-behavior-x:none}
+        body{margin:0}
+        button,input,select{max-width:100%}
+        .app-container{width:100%;max-width:100vw;overflow-x:hidden}
+        .header-section{padding:10px 12px 11px;position:relative}
+        .top-bar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;margin-bottom:10px}
+        .purchase-title{min-width:0;text-align:center;line-height:1.05}
+        .purchase-title h1{margin:0;font-size:clamp(1.05rem,4.5vw,1.28rem);white-space:nowrap}
+        #purchase-progress{display:block;margin-top:4px;color:var(--cor-texto-secundario);font-size:.72rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        #header-total{font-size:clamp(1.22rem,5vw,1.55rem);line-height:1;white-space:nowrap}
+        #back-button{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:8px 11px;font-size:.9rem;font-weight:700;white-space:nowrap}
+        .header-controls{display:grid;grid-template-columns:minmax(0,1fr) 50px;gap:8px;width:100%;min-width:0}
+        #form-adicionar-item{display:grid;grid-template-columns:minmax(0,1fr) 50px;gap:8px;min-width:0}
+        #input-novo-item{width:100%;min-width:0;height:50px;padding:11px 13px;font-size:1rem;background:#fff}
+        .header-controls>.btn,#form-adicionar-item>.btn{width:50px;height:50px;padding:0;border-radius:12px}
+        .main-content{padding:12px;overflow-x:hidden;scrollbar-gutter:stable}
+        .geo-promo-strip{margin:0 0 10px;border:1px solid rgba(0,122,255,.12);box-shadow:0 2px 9px rgba(0,0,0,.055)}
+        .geo-promo-toggle{padding:10px 11px;min-width:0}
+        .geo-promo-toggle>strong{min-width:0;white-space:nowrap}
+        .geo-promo-toggle>span{min-width:0;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .geo-promo-body{padding:10px 11px;background:#fff}
+        .geo-promo-controls{display:grid;grid-template-columns:minmax(82px,.35fr) minmax(0,1fr);gap:8px;margin-bottom:8px}
+        .geo-promo-controls select,.geo-promo-controls button{width:100%;min-width:0;min-height:42px}
+        #geo-promo-results{font-size:.83rem;color:var(--cor-texto-secundario)}
+        .tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;width:100%;margin-bottom:11px;overflow:visible}
+        .tab-btn{min-width:0;width:100%;padding:9px 4px;border-radius:10px;font-size:clamp(.72rem,3.2vw,.94rem);line-height:1.15;white-space:normal;overflow-wrap:anywhere}
+        .item-list{margin:0;width:100%;min-width:0}
+        .item-row,.report-item{width:100%;min-width:0;margin-bottom:9px;padding:11px 10px;border:1px solid rgba(33,37,41,.055);box-shadow:0 3px 10px rgba(0,0,0,.06);transform:none!important;overflow:hidden}
+        .item-row{align-items:flex-start}
+        .item-row.active{box-shadow:inset 0 0 0 2px var(--cor-primaria),0 4px 14px rgba(0,122,255,.14);transform:none!important}
+        .item-emoji{font-size:1.55rem;margin-right:9px;line-height:1.2}
+        .item-details,.report-details{min-width:0;max-width:100%;overflow:hidden}
+        .item-name,.report-location,.report-date,.item-price-info,.report-total{overflow-wrap:anywhere;word-break:break-word}
+        .item-name{font-size:clamp(1.02rem,4vw,1.18rem);font-weight:700;line-height:1.18}
+        .delete-btn,.delete-report-btn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;padding:7px;margin-left:6px;border-radius:9px;background:rgba(255,59,48,.07)}
+        .item-offer-zone{pointer-events:auto;margin-top:7px;padding-top:7px;border-top:1px solid #edf0f2;min-width:0}
+        .item-offer-best{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px;align-items:center;min-width:0;font-size:.79rem;line-height:1.2;color:#35515f}
+        .item-offer-flame{font-size:.86rem}
+        .item-offer-market{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:650}
+        .item-offer-price{color:#16883a;font-size:.9rem;font-weight:800;white-space:nowrap}
+        .item-offer-sub{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:5px;min-width:0}
+        .item-offer-distance{min-width:0;color:var(--cor-texto-secundario);font-size:.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .item-offer-action{pointer-events:auto;border:0;background:transparent;color:var(--cor-primaria);padding:2px 0;font:inherit;font-size:.76rem;font-weight:800;cursor:pointer;white-space:nowrap}
+        .item-offer-zone.no-offer{padding-top:6px;color:#8b949e;font-size:.72rem;border-top-style:dashed}
+        .calculator-footer{padding:0 10px max(10px,env(safe-area-inset-bottom));border-top:1px solid #495057;box-shadow:0 -5px 18px rgba(0,0,0,.14)}
+        #toggle-calc-btn{top:-31px;width:auto;min-width:116px;height:32px;padding:0 10px;gap:7px;display:flex;align-items:center;justify-content:center;border-radius:12px 12px 0 0;font-weight:750;font-size:.78rem;white-space:nowrap}
+        .calc-toggle-label{display:inline-block;color:#e9ecef}
+        .calculator-body{max-height:min(44vh,330px);padding-top:12px;overflow-y:auto}
+        .calculator-display-wrapper{margin-bottom:8px;padding:5px 9px}
+        #calc-display{font-size:clamp(2rem,10vw,2.55rem)}
+        .keypad{gap:7px}
+        .keypad button{height:clamp(43px,7.2vh,52px);font-size:1.16rem}
+        .modal-overlay{padding:12px}
+        .modal-content{width:min(96vw,520px);max-height:90dvh;overflow:auto}
+        .modal-actions{flex-wrap:wrap}
+        .modal-actions>div{display:flex;gap:7px;flex-wrap:wrap}
+        .offer-sheet-overlay{position:fixed;inset:0;z-index:7000;background:rgba(8,15,22,.52);display:flex;align-items:flex-end;justify-content:center;opacity:0;visibility:hidden;transition:opacity .2s ease,visibility .2s ease;padding:0}
+        .offer-sheet-overlay.visible{opacity:1;visibility:visible}
+        .offer-sheet{width:min(100%,680px);max-height:min(84dvh,760px);background:#f7f8fa;border-radius:20px 20px 0 0;box-shadow:0 -16px 50px rgba(0,0,0,.22);overflow:hidden;transform:translateY(18px);transition:transform .22s ease;display:flex;flex-direction:column}
+        .offer-sheet-overlay.visible .offer-sheet{transform:translateY(0)}
+        .offer-sheet-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 16px 12px;background:#fff;border-bottom:1px solid #e5e8eb;position:sticky;top:0;z-index:2}
+        .offer-sheet-title{min-width:0}.offer-sheet-title strong{display:block;font-size:1.08rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.offer-sheet-title span{display:block;margin-top:3px;font-size:.78rem;color:var(--cor-texto-secundario)}
+        .offer-sheet-close{width:38px;height:38px;border:0;border-radius:50%;background:#eef1f4;font-size:1.25rem;cursor:pointer;flex:0 0 auto}
+        .offer-sheet-body{padding:12px;overflow-y:auto;overscroll-behavior:contain}
+        .offer-sheet-card{background:#fff;border:1px solid #e1e5e9;border-radius:14px;padding:12px;margin-bottom:9px;box-shadow:0 2px 8px rgba(0,0,0,.045)}
+        .offer-sheet-card.best{border-color:rgba(52,199,89,.45);box-shadow:0 3px 10px rgba(52,199,89,.08)}
+        .offer-sheet-card-top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start}
+        .offer-sheet-market{font-weight:800;min-width:0;overflow-wrap:anywhere}.offer-sheet-product{font-size:.82rem;color:var(--cor-texto-secundario);margin-top:3px;overflow-wrap:anywhere}
+        .offer-sheet-price{font-size:1.28rem;color:#16883a;font-weight:850;white-space:nowrap}
+        .offer-sheet-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.offer-pill{display:inline-flex;align-items:center;min-height:25px;padding:4px 7px;border-radius:999px;background:#eef2f5;color:#56616c;font-size:.72rem;font-weight:650}.offer-pill.best{background:#e7f7ec;color:#187338}
+        .offer-sheet-actions{display:flex;gap:8px;margin-top:10px}.offer-sheet-actions a{flex:1;text-align:center;text-decoration:none;background:var(--cor-primaria);color:#fff;padding:9px;border-radius:9px;font-size:.8rem;font-weight:800}
+        @media (max-width:390px){
+            #back-button{width:42px;padding:8px 5px}#back-button span{display:none}
+            .top-bar{gap:7px}.header-section{padding-left:9px;padding-right:9px}.main-content{padding-left:9px;padding-right:9px}
+            .geo-promo-toggle{display:grid;grid-template-columns:minmax(0,1fr);gap:3px}.geo-promo-toggle>span{text-align:left}
+            .tab-btn{padding-left:2px;padding-right:2px;font-size:.7rem}
+            .item-row,.report-item{padding-left:8px;padding-right:8px}.item-emoji{margin-right:7px}
+        }
+        @media (min-width:700px){
+            .header-section{padding:14px 18px}.main-content{padding:16px 18px}.tabs{gap:8px}.tab-btn{padding:11px 8px}
+            .item-row,.report-item{padding:13px 14px}.geo-promo-controls{grid-template-columns:130px minmax(0,1fr)}
+            .calculator-body{max-height:355px}.keypad button{height:52px}
+        }
+        @media (min-width:900px){
+            body{padding:0 20px}.app-container{width:min(980px,100%)}.main-content{padding:18px 22px}.header-section{padding:15px 22px}
+            .calculator-footer{padding-left:22px;padding-right:22px}.offer-sheet{border-radius:20px;margin-bottom:18px;max-height:78vh}.offer-sheet-overlay{padding:18px;align-items:flex-end}
+        }
     </style>
 </head>
 <body>
@@ -129,8 +221,8 @@
     <div class="app-container">
         <header class="header-section">
             <div class="top-bar">
-                <a href="#" id="back-button">❮ Voltar</a>
-                <h1>Sua Compra</h1>
+                <a href="#" id="back-button">❮ <span>Voltar</span></a>
+                <div class="purchase-title"><h1>Sua Compra</h1><span id="purchase-progress">Carregando lista...</span></div>
                 <div id="header-total">R$ 0,00</div>
             </div>
             <div class="header-controls">
@@ -147,7 +239,7 @@
         <main class="main-content">
             <section id="geo-promo-strip" class="geo-promo-strip" aria-label="Promoções próximas">
                 <button id="geo-promo-toggle" class="geo-promo-toggle" type="button">
-                    <strong>🔥 Promoções dos itens da sua lista</strong><span id="geo-promo-summary">Toque para consultar perto de você</span>
+                    <strong>🔥 Ofertas perto de você</strong><span id="geo-promo-summary">Ative a localização para comparar</span>
                 </button>
                 <div class="geo-promo-body">
                     <div class="geo-promo-controls">
@@ -174,7 +266,7 @@
         </main>
 
         <footer class="calculator-footer">
-            <button id="toggle-calc-btn" title="Mostrar/Ocultar Calculadora"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg></button>
+            <button id="toggle-calc-btn" title="Mostrar/Ocultar Calculadora" aria-label="Abrir ou fechar caixa/calculadora"><span class="calc-toggle-label">🧮 Caixa</span><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg></button>
             <div class="calculator-body">
                 <div class="calculator-display-wrapper">
                     <div id="active-item-display">Nenhum item selecionado</div>
@@ -251,7 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
         activeItemId: null,
         calcDisplay: '0',
         currentTab: 'faltando',
-        ui: { isCalculatorCollapsed: false },
+        ui: { isCalculatorCollapsed: true },
     };
 
     const ui = {
@@ -431,7 +523,7 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         updateItem: (id, updates) => listRef.child(id).update(updates),
         handleItemClick: (id, status) => { if (status === 'faltando') interactions.selectItem(id); if (status === 'comprado') interactions.updateItem(id, { status: 'faltando', preco: 0, quantidade: 1 }); if (status === 'adiado') interactions.updateItem(id, { status: 'faltando' }); },
-        selectItem: (id) => { state.activeItemId = (state.activeItemId === id) ? null : id; state.calcDisplay = '0'; render.all(); },
+        selectItem: (id) => { const selecting = state.activeItemId !== id; state.activeItemId = selecting ? id : null; state.calcDisplay = '0'; if (selecting) { state.ui.isCalculatorCollapsed = false; store.saveUI(); } render.all(); },
         handleTabClick: (tabName) => {
             if (tabName === 'adiados' && state.activeItemId) {
                 const item = state.itens.find(i => i.id == state.activeItemId);
@@ -550,6 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (reportRow) { interactions.showReport(reportRow.dataset.id); }
     });
     ui.appContainer.addEventListener('click', e => {
+        if (e.target.closest('.item-offer-action, .offer-sheet-overlay')) return;
         const row = e.target.closest('.item-row'); if (!row) return;
         const id = row.dataset.id;
         const item = state.itens.find(i => i.id === id); if (!item) return;
@@ -615,6 +708,6 @@ window.addEventListener('appinstalled', () => {
     deferredPrompt = null;
 });
 </script>
-    <script src="./js/lista-promocoes.js?v=1.2.0"></script>
+    <script src="./js/lista-promocoes.js?v=1.3.0"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-const CACHE = 'mercador-ia-shell-v1.2.0';
+const CACHE = 'mercador-ia-shell-v1.3.0';
 const SHELL = [
   './', './index.html', './cadastro.html', './admin.html', './usuario.html',
   './css/app.css', './css/auth.css', './css/admin.css', './css/user.css',
