@@ -100,7 +100,7 @@
         .geo-promo-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
         .geo-promo-controls select,.geo-promo-controls button{min-height:40px;border-radius:9px;border:1px solid var(--cor-borda);padding:8px 10px;font:inherit}
         .geo-promo-controls button{border:none;background:var(--cor-primaria);color:white;font-weight:650;cursor:pointer;flex:1;min-width:190px}
-        .geo-promo-status{font-size:.85rem;color:var(--cor-texto-secundario);margin-bottom:8px}
+        .geo-promo-status{font-size:.85rem;color:var(--cor-texto-secundario);margin-bottom:8px;line-height:1.35}.geo-promo-status.live{color:#157a35;font-weight:750}.geo-promo-status.warn{color:#9a5b00;font-weight:650}
         .geo-offer{background:white;border:1px solid var(--cor-borda);border-radius:11px;padding:11px;margin-top:8px}
         .geo-offer-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.geo-offer-name{font-weight:700}.geo-offer-price{font-size:1.15rem;font-weight:800;color:var(--cor-sucesso);white-space:nowrap}
         .geo-offer-meta{font-size:.82rem;color:var(--cor-texto-secundario);margin-top:5px;line-height:1.35}.geo-offer-actions{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap}.geo-offer-actions a{font-size:.82rem;color:var(--cor-primaria);font-weight:700;text-decoration:none}
@@ -246,9 +246,9 @@
                         <select id="geo-promo-radius" aria-label="Raio de busca">
                             <option value="1">1 km</option><option value="3">3 km</option><option value="5" selected>5 km</option><option value="10">10 km</option><option value="25">25 km</option>
                         </select>
-                        <button id="geo-promo-locate" type="button">Usar minha localização e buscar</button>
+                        <button id="geo-promo-locate" type="button">Ativar localização em tempo real</button>
                     </div>
-                    <div id="geo-promo-status" class="geo-promo-status">Sua localização só será usada no aparelho para calcular a distância.</div>
+                    <div id="geo-promo-status" class="geo-promo-status">O GPS acompanha sua posição enquanto esta lista estiver aberta. Sua localização não é salva no Firebase.</div>
                     <div id="geo-promo-results"></div>
                 </div>
             </section>
