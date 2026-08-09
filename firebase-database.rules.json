@@ -15,7 +15,7 @@
         ".read": "auth != null && (auth.uid === 'Ah16jHtjZTgSVBzgL759FnQl5W73' || (auth.uid === $uid && root.child('users').child(auth.uid).child('status').val() === 'active') || (root.child('users').child(auth.uid).child('status').val() === 'active' && (root.child('users').child(auth.uid).child('role').val() === 'superadmin' || root.child('users').child(auth.uid).child('role').val() === 'admin')))",
         ".write": "auth != null && (auth.uid === 'Ah16jHtjZTgSVBzgL759FnQl5W73' || (auth.uid === $uid && root.child('users').child(auth.uid).child('status').val() === 'active') || (root.child('users').child(auth.uid).child('status').val() === 'active' && root.child('users').child(auth.uid).child('role').val() === 'superadmin'))",
         "$itemId": {
-          ".validate": "!newData.exists() || (newData.hasChildren(['name','quantity','priority','status','createdAt']) && newData.child('name').isString() && newData.child('name').val().length >= 2 && newData.child('name').val().length <= 120 && newData.child('quantity').isNumber() && newData.child('quantity').val() > 0 && newData.child('quantity').val() <= 999 && (newData.child('priority').val() === 'low' || newData.child('priority').val() === 'normal' || newData.child('priority').val() === 'high') && (newData.child('status').val() === 'pending' || newData.child('status').val() === 'bought'))"
+          ".validate": "!newData.exists() || ((newData.hasChildren(['nome','quantidade','preco','status']) && newData.child('nome').isString() && newData.child('nome').val().length >= 1 && newData.child('nome').val().length <= 120 && newData.child('quantidade').isNumber() && newData.child('quantidade').val() > 0 && newData.child('quantidade').val() <= 999 && newData.child('preco').isNumber() && newData.child('preco').val() >= 0 && (newData.child('status').val() === 'faltando' || newData.child('status').val() === 'comprado' || newData.child('status').val() === 'adiado')) || (newData.hasChildren(['name','quantity','priority','status','createdAt']) && newData.child('name').isString() && newData.child('name').val().length >= 2 && newData.child('name').val().length <= 120 && newData.child('quantity').isNumber() && newData.child('quantity').val() > 0 && newData.child('quantity').val() <= 999 && (newData.child('priority').val() === 'low' || newData.child('priority').val() === 'normal' || newData.child('priority').val() === 'high') && (newData.child('status').val() === 'pending' || newData.child('status').val() === 'bought')))"
         }
       }
     },
@@ -67,6 +67,15 @@
       ".read": "auth != null && (auth.uid === 'Ah16jHtjZTgSVBzgL759FnQl5W73' || (root.child('users').child(auth.uid).child('status').val() === 'active' && (root.child('users').child(auth.uid).child('role').val() === 'superadmin' || root.child('users').child(auth.uid).child('role').val() === 'admin')))",
       "$logId": {
         ".write": "auth != null && (auth.uid === 'Ah16jHtjZTgSVBzgL759FnQl5W73' || (root.child('users').child(auth.uid).child('status').val() === 'active' && (root.child('users').child(auth.uid).child('role').val() === 'superadmin' || root.child('users').child(auth.uid).child('role').val() === 'admin')))"
+      }
+    },
+    "purchase_reports": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === 'Ah16jHtjZTgSVBzgL759FnQl5W73' || (auth.uid === $uid && root.child('users').child(auth.uid).child('status').val() === 'active') || (root.child('users').child(auth.uid).child('status').val() === 'active' && (root.child('users').child(auth.uid).child('role').val() === 'superadmin' || root.child('users').child(auth.uid).child('role').val() === 'admin')))",
+        ".write": "auth != null && (auth.uid === 'Ah16jHtjZTgSVBzgL759FnQl5W73' || (auth.uid === $uid && root.child('users').child(auth.uid).child('status').val() === 'active') || (root.child('users').child(auth.uid).child('status').val() === 'active' && root.child('users').child(auth.uid).child('role').val() === 'superadmin'))",
+        "$reportId": {
+          ".validate": "!newData.exists() || (newData.hasChildren(['content','location','total','createdAt']) && newData.child('content').isString() && newData.child('content').val().length > 0 && newData.child('location').isString() && newData.child('location').val().length <= 160 && newData.child('total').isNumber() && newData.child('total').val() >= 0 && newData.child('createdAt').isString())"
+        }
       }
     }
   }

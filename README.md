@@ -1,4 +1,6 @@
-# Mercador IA — V1.0.0
+# MERCADOR IA — V1.2
+
+> **Correção importante:** `usuario.html` agora usa diretamente o código funcional da Lista Inteligente original enviada pelo usuário (calculadora, A Comprar, Comprados, Adiados, Relatórios, finalização e histórico), adaptado apenas ao Firebase novo e acrescido do módulo de promoções geolocalizadas.
 
 Plataforma SaaS/PWA de lista inteligente com promoções verificadas por geolocalização.
 
@@ -21,11 +23,10 @@ A autorização administrativa real é protegida pelas regras do Realtime Databa
 - `index.html` — login
 - `cadastro.html` — cadastro público de consumidor
 - `admin.html` — painel administrativo
-- `usuario.html` — painel do consumidor + lista inteligente
+- `usuario.html` — painel do consumidor com a Lista Inteligente completa: A Comprar, Comprados, Adiados, Relatórios, calculadora e Ofertas
 - `firebase-database.rules.json` — regras completas desta V1
 - `js/firebase-config.js` — Firebase oficial deste projeto
 - `js/admin.js` — usuários, mercados, unidades, promoções, inbox e auditoria
-- `js/usuario.js` — lista por UID, localização, raio e ofertas
 - `js/smart-matcher.js` — correspondência inteligente entre item e promoção
 - `service-worker.js` + `manifest.webmanifest` — PWA
 
@@ -73,9 +74,27 @@ A senha não está no código nem no banco de dados.
 5. Marcar "Confirmei o preço e a validade desta oferta".
 6. Admin > Usuários > criar um consumidor ou usar `cadastro.html`.
 7. Entrar como consumidor.
-8. Adicionar na lista, por exemplo, `Chocolate`.
-9. Autorizar a localização no painel.
-10. Se houver promoção compatível em unidade dentro do raio, ela aparece automaticamente.
+8. Na aba **A Comprar**, adicionar na lista, por exemplo, `Chocolate`.
+9. Usar a calculadora inferior normalmente durante a compra; itens pagos migram para **Comprados**, e a compra pode gerar **Relatórios** como na lista original.
+10. Na aba **🔥 Ofertas**, autorizar a localização e escolher o raio.
+11. Se houver promoção compatível em unidade dentro do raio, ela aparece automaticamente sem apagar nem substituir o fluxo tradicional da lista.
+
+
+## Lista do consumidor preservada
+
+A V1.1 corrige a interface do consumidor para manter o fluxo completo da Lista Inteligente original usada como referência pelo projeto:
+
+- `A Comprar`
+- `Comprados`
+- `Adiados`
+- `Relatórios`
+- total da compra no cabeçalho
+- calculadora inferior recolhível
+- quantidade × preço e total por item
+- finalização da compra e histórico em `purchase_reports/{uid}`
+- nova aba `🔥 Ofertas`, acrescentada sem retirar as rotinas anteriores
+
+A inteligência de promoções atua sobre os itens em `A Comprar`; ela não substitui a lista tradicional.
 
 ## Valores reais
 
@@ -111,6 +130,7 @@ As coordenadas das unidades dos mercados são persistidas porque fazem parte do 
 ```text
 users/{uid}
 shopping_lists/{uid}/{itemId}
+purchase_reports/{uid}/{reportId}
 user_settings/{uid}
 markets/{marketId}
 market_units/{unitId}

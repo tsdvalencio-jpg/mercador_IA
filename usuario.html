@@ -1,97 +1,620 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#07120d">
-  <meta name="description" content="Lista inteligente Mercador IA com promoções verificadas próximas.">
-  <title>Mercador IA — Minha Lista</title>
-  <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./css/app.css?v=1.0.0">
-  <link rel="stylesheet" href="./css/user.css?v=1.0.0">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mercador IA — Sua Compra</title>
+    <meta name="theme-color" content="#007aff"/>
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="apple-touch-icon" href="./assets/icon-192.png">
+    
+    <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
+    
+    <script src="./js/firebase-config.js?v=1.2.0"></script>
+    <script src="./js/utils.js?v=1.2.0"></script>
+    <script src="./js/auth.js?v=1.2.0"></script>
+    <script src="./js/smart-matcher.js?v=1.2.0"></script>
+
+    <style>
+        :root {
+            --cor-fundo: #dee2e6; --cor-container: #f8f9fa; --cor-primaria: #007aff;
+            --cor-sucesso: #34c759; --cor-perigo: #ff3b30; --cor-aviso: #ff9500;
+            --cor-texto-principal: #212529; --cor-texto-secundario: #6c757d;
+            --cor-borda: #ced4da; --sombra-painel: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --raio-borda: 16px; --font-principal: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            --font-mono: 'Courier New', monospace;
+        }
+        html, body { height: 100%; overflow: hidden; font-family: var(--font-principal); background-color: var(--cor-fundo); color: var(--cor-texto-principal); }
+        #update-banner { display: none; background-color: var(--cor-aviso); color: white; padding: 10px; text-align: center; position: fixed; top: 0; width: 100%; z-index: 6000; }
+        #update-banner button { border: 1px solid white; background: transparent; color: white; padding: 5px 10px; border-radius: 5px; margin-left: 15px; cursor: pointer; }
+        #install-banner{display:none;position:fixed;bottom:10px;left:10px;right:10px;background-color:var(--cor-container);color:var(--cor-texto-principal);padding:15px;border-radius:var(--raio-borda);box-shadow:0 8px 24px rgba(0,0,0,0.2);z-index:5000;align-items:center;justify-content:space-between;animation:slideUp 0.5s ease-out}
+        #install-banner p{margin:0;font-size:0.9rem;line-height:1.3}
+        #install-banner-buttons{display:flex;gap:10px}
+        #install-btn,#dismiss-btn{border:none;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer}
+        #install-btn{background-color:var(--cor-primaria);color:white}
+        #dismiss-btn{background-color:transparent;color:var(--cor-texto-secundario)}
+        @keyframes slideUp{from{transform:translateY(150%);opacity:0}to{transform:translateY(0);opacity:1}}
+        .app-container{display:flex;flex-direction:column;height:100%; visibility: hidden;}
+        .app-container.loaded { visibility: visible; }
+        .header-section{padding:10px 15px;background-color:var(--cor-container);box-shadow:0 2px 4px rgba(0,0,0,0.1);z-index:10;flex-shrink:0}
+        .top-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+        .top-bar h1{font-size:1.2rem;margin:0}
+        #header-total{font-size:1.5rem;font-weight:bold;color:var(--cor-sucesso)}
+        .header-controls{display:flex;gap:10px;align-items:center}
+        #form-adicionar-item{display:flex;gap:10px;flex-grow:1}
+        #input-novo-item{flex-grow:1;padding:12px;border-radius:10px;border:1px solid var(--cor-borda);font-size:1rem;height:50px}
+        .btn{padding:12px;border:none;border-radius:10px;font-size:1.5rem;font-weight:600;cursor:pointer;transition:all 0.2s;color:white;display:flex;align-items:center;justify-content:center;width:50px;height:50px;flex-shrink:0}
+        .btn-primary{background-color:var(--cor-primaria)}
+        .btn-success{background-color:var(--cor-sucesso)}
+        .main-content{flex-grow:1;overflow-y:auto;padding:15px}
+        .tabs{display:flex;gap:10px;margin-bottom:15px}
+        .tab-btn{flex:1;padding:10px;background:#e9ecef;border:none;border-radius:8px;font-size:1rem;font-weight:500;cursor:pointer;transition:all 0.2s;color:var(--cor-texto-secundario)}
+        .tab-btn.active{background-color:var(--cor-primaria);color:white}
+        .tab-btn[data-tab="adiados"].action-mode{background-color:var(--cor-aviso);color:white;font-weight:bold}
+        .list-container{display:none}
+        .list-container.active{display:block}
+        .item-list{list-style:none;padding:0}
+        .item-row, .report-item{display:flex;align-items:center;padding:10px;background:var(--cor-container);border-radius:12px;margin-bottom:10px;box-shadow:var(--sombra-painel);transition:all 0.3s ease;cursor:pointer}
+        .report-item:hover{transform:scale(1.02); box-shadow:0 0 0 2px var(--cor-primaria);}
+        .item-row.status-comprado{opacity:0.7}
+        .item-row.status-comprado .item-name{text-decoration:line-through}
+        .item-row.status-adiado{border-left:5px solid var(--cor-aviso);opacity:0.8}
+        .item-row.active{box-shadow:0 0 0 3px var(--cor-primaria),0 4px 12px rgba(0,122,255,0.3);transform:scale(1.02)}
+        .item-emoji{font-size:1.5rem;margin-right:10px;user-select:none}
+        .item-details, .report-details{display:flex;flex-direction:column;flex-grow:1;pointer-events:none}
+        .item-name, .report-date{font-size:1.2rem;font-weight:500}
+        .report-location{font-size: 1rem; color: var(--cor-texto-principal); font-weight: 500;}
+        .item-price-info, .report-total{font-size:0.9rem;color:var(--cor-texto-secundario)}
+        .delete-btn, .delete-report-btn{background:none;border:none;cursor:pointer;padding:5px;margin-left:10px; flex-shrink: 0;}
+        .calculator-footer{flex-shrink:0;background-color:#212529;padding:0 15px 15px 15px;border-top:2px solid #495057;position:relative}
+        #toggle-calc-btn{position:absolute;top:-25px;left:50%;transform:translateX(-50%);width:50px;height:25px;background-color:#212529;border:2px solid #495057;border-bottom:none;border-radius:10px 10px 0 0;color:#adb5bd;cursor:pointer}
+        #toggle-calc-btn svg{transition:transform 0.4s ease}
+        .calculator-footer.collapsed #toggle-calc-btn svg{transform:rotate(180deg)}
+        .calculator-body{overflow:hidden;max-height:300px;transition:max-height 0.4s ease-out,padding-top 0.4s ease-out,opacity 0.3s ease-out;padding-top:15px;opacity:1}
+        .calculator-footer.collapsed .calculator-body{max-height:0;padding-top:0;opacity:0}
+        .calculator-display-wrapper{background:#000;border-radius:10px;padding:5px 10px;margin-bottom:10px;border:2px solid #495057}
+        #active-item-display{color:#adb5bd;font-size:0.8rem;text-align:right;height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        #calc-display{font-family:var(--font-mono);color:#4eff89;text-shadow:0 0 5px #4eff89,0 0 8px #4eff89;font-size:2.5rem;text-align:right}
+        .keypad{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+        .keypad button{font-size:1.3rem;font-weight:bold;border:none;border-radius:8px;background-color:#495057;color:#f8f9fa;height:48px;transition:all 0.1s}
+        .keypad button:active{transform:scale(0.95);background-color:#6c757d}
+        .keypad .operator{background-color:#ff9f0a}
+        .keypad .action{background-color:var(--cor-sucesso);font-size:1.7rem}
+        .keypad .clear{background-color:var(--cor-perigo)}
+        .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;opacity:0;visibility:hidden;transition:opacity 0.3s;z-index:2000}
+        .modal-overlay.visible{opacity:1;visibility:visible}
+        .modal-content{background:#f0f1f6;padding:20px;border-radius:var(--raio-borda);width:90%;max-width:400px; display: flex; flex-direction: column;}
+        #report-paper, #report-view-content{background:white;padding:20px;font-family:'Courier New',Courier,monospace;white-space:pre-wrap;max-height:60vh;overflow-y:auto;border:1px dashed #ccc;margin-bottom:20px}
+        .modal-actions{display:flex;gap:10px;justify-content:flex-end}
+        #back-button { padding: 8px 16px; font-size: 1rem; background-color: #e9ecef; border: none; border-radius: 8px; cursor: pointer; color: #495057; text-decoration: none;}
+
+        /* MERCADOR IA V1.2: a Lista Inteligente original permanece intacta no celular.
+           As regras abaixo só acrescentam responsividade para telas maiores e o painel de ofertas. */
+        .geo-promo-strip{background:var(--cor-container);border-radius:12px;margin-bottom:12px;box-shadow:var(--sombra-painel);overflow:hidden}
+        .geo-promo-toggle{width:100%;border:0;background:transparent;padding:11px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;font:inherit;color:var(--cor-texto-principal);cursor:pointer;text-align:left}
+        .geo-promo-toggle strong{font-size:.95rem}.geo-promo-toggle span{font-size:.82rem;color:var(--cor-texto-secundario)}
+        .geo-promo-body{display:none;border-top:1px solid var(--cor-borda);padding:12px}.geo-promo-strip.open .geo-promo-body{display:block}
+        .geo-promo-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+        .geo-promo-controls select,.geo-promo-controls button{min-height:40px;border-radius:9px;border:1px solid var(--cor-borda);padding:8px 10px;font:inherit}
+        .geo-promo-controls button{border:none;background:var(--cor-primaria);color:white;font-weight:650;cursor:pointer;flex:1;min-width:190px}
+        .geo-promo-status{font-size:.85rem;color:var(--cor-texto-secundario);margin-bottom:8px}
+        .geo-offer{background:white;border:1px solid var(--cor-borda);border-radius:11px;padding:11px;margin-top:8px}
+        .geo-offer-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.geo-offer-name{font-weight:700}.geo-offer-price{font-size:1.15rem;font-weight:800;color:var(--cor-sucesso);white-space:nowrap}
+        .geo-offer-meta{font-size:.82rem;color:var(--cor-texto-secundario);margin-top:5px;line-height:1.35}.geo-offer-actions{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap}.geo-offer-actions a{font-size:.82rem;color:var(--cor-primaria);font-weight:700;text-decoration:none}
+        @media (min-width: 900px){
+            body{display:flex;justify-content:center;align-items:stretch;padding:0 20px;box-sizing:border-box}
+            .app-container{width:min(920px,100%);box-shadow:0 0 30px rgba(0,0,0,.12);background:var(--cor-fundo)}
+            .header-section{padding:14px 20px}.main-content{padding:20px}.calculator-footer{padding-left:20px;padding-right:20px}
+            .top-bar h1{font-size:1.35rem}#header-total{font-size:1.65rem}.item-row,.report-item{padding:13px 15px}.item-name,.report-date{font-size:1.15rem}
+        }
+    </style>
 </head>
 <body>
-  <div id="loading" class="loading-screen"><div class="loading-box"><div class="spinner"></div><strong>Carregando sua lista inteligente...</strong></div></div>
-
-  <header class="topbar">
-    <div class="shell topbar-inner">
-      <a class="brand" href="./usuario.html"><span class="brand-mark">M</span><span>Mercador IA<span class="brand-sub">Minha lista inteligente</span></span></a>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span class="badge ok" id="syncBadge">tempo real</span>
-        <button class="btn btn-ghost btn-sm" id="logoutBtn" type="button">Sair</button>
-      </div>
+    <div id="update-banner">
+        Nova versão disponível!
+        <button id="update-btn">Atualizar</button>
     </div>
-  </header>
 
-  <main class="page">
-    <div class="shell">
-      <section class="user-hero">
-        <div class="card smart-banner">
-          <div>
-            <div class="eyebrow">Lista inteligente</div>
-            <h1 id="userGreeting">Sua compra começa antes de chegar ao mercado.</h1>
-            <p class="muted">Cadastre o que precisa. Quando você autorizar a localização, o Mercador IA procura promoções verificadas dos itens da sua lista dentro do raio escolhido.</p>
-          </div>
-          <div class="auto-grid" style="position:relative;z-index:1">
-            <div><span class="kpi-label">A comprar</span><div class="kpi-value" id="pendingCount" style="font-size:2rem">0</div></div>
-            <div><span class="kpi-label">Ofertas encontradas</span><div class="kpi-value" id="offerCount" style="font-size:2rem">0</div></div>
-            <div><span class="kpi-label">Economia potencial</span><div class="kpi-value" id="savingTotal" style="font-size:1.65rem">R$ 0,00</div></div>
-          </div>
+    <div id="install-banner">
+        <p>Leve sua lista de compras para a tela inicial!</p>
+        <div id="install-banner-buttons">
+            <button id="dismiss-btn">Agora não</button>
+            <button id="install-btn">Instalar</button>
         </div>
+    </div>
 
-        <div class="card location-box">
-          <div>
-            <div class="eyebrow">Proximidade real</div>
-            <h2 style="margin:7px 0 10px">Promoções perto de você</h2>
-            <div class="location-status"><span class="dot" id="locationDot"></span><div><strong id="locationTitle">Localização ainda não autorizada</strong><div class="small muted" id="locationText">Toque no botão abaixo para calcular mercados próximos.</div></div></div>
-          </div>
-          <div>
-            <div class="radius-row" style="margin-bottom:10px"><label class="small muted" for="radiusSelect">Raio:</label><select class="select" id="radiusSelect"><option value="1">1 km</option><option value="3">3 km</option><option value="5" selected>5 km</option><option value="10">10 km</option><option value="25">25 km</option></select></div>
-            <button class="btn btn-primary btn-mobile-full" id="locateBtn" type="button">📍 Usar minha localização</button>
-            <p class="field-help" style="margin:10px 0 0">Nesta versão, a latitude/longitude usada no cálculo não é gravada no Firebase.</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="user-main">
-        <div class="card">
-          <div class="card-header"><div><div class="eyebrow">Sua lista</div><h2 style="margin:5px 0 0">O que falta comprar</h2></div><span class="badge info" id="listCountBadge">0 itens</span></div>
-          <div class="card-body">
-            <form id="quickAddForm" class="quick-add">
-              <input class="input" id="itemName" required maxlength="120" placeholder="Ex.: Chocolate">
-              <input class="input" id="itemQuantity" type="number" min="1" max="999" step="1" value="1" aria-label="Quantidade">
-              <button class="btn btn-primary" type="submit">+ Adicionar</button>
-            </form>
-            <div class="form-grid" style="margin-top:10px">
-              <div class="field"><label for="itemPriority">Prioridade padrão</label><select class="select" id="itemPriority"><option value="normal">Normal</option><option value="high">Alta</option><option value="low">Baixa</option></select></div>
-              <div class="field"><label for="itemNote">Observação opcional</label><input class="input" id="itemNote" maxlength="120" placeholder="Ex.: preferir sem açúcar"></div>
+    <div class="app-container">
+        <header class="header-section">
+            <div class="top-bar">
+                <a href="#" id="back-button">❮ Voltar</a>
+                <h1>Sua Compra</h1>
+                <div id="header-total">R$ 0,00</div>
             </div>
-            <div id="shoppingList" class="list" style="margin-top:16px"></div>
-            <div style="margin-top:14px"><button class="btn btn-ghost btn-sm" id="clearBoughtBtn" type="button">Remover itens já comprados</button></div>
-          </div>
-        </div>
+            <div class="header-controls">
+                <form id="form-adicionar-item">
+                    <input type="text" id="input-novo-item" placeholder="Adicionar item...">
+                    <button type="submit" class="btn btn-primary" title="Adicionar">+</button>
+                </form>
+                <button id="btn-finalizar" class="btn btn-success" title="Finalizar Compra e Gerar Relatório">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                </button>
+            </div>
+        </header>
 
-        <div class="card">
-          <div class="card-header"><div><div class="eyebrow">Correspondência inteligente</div><h2 style="margin:5px 0 0">Promoções da sua lista</h2></div><span class="badge ok" id="offerStatusBadge">aguardando localização</span></div>
-          <div class="card-body">
-            <div id="offersList" class="list"></div>
-          </div>
-        </div>
-      </section>
+        <main class="main-content">
+            <section id="geo-promo-strip" class="geo-promo-strip" aria-label="Promoções próximas">
+                <button id="geo-promo-toggle" class="geo-promo-toggle" type="button">
+                    <strong>🔥 Promoções dos itens da sua lista</strong><span id="geo-promo-summary">Toque para consultar perto de você</span>
+                </button>
+                <div class="geo-promo-body">
+                    <div class="geo-promo-controls">
+                        <select id="geo-promo-radius" aria-label="Raio de busca">
+                            <option value="1">1 km</option><option value="3">3 km</option><option value="5" selected>5 km</option><option value="10">10 km</option><option value="25">25 km</option>
+                        </select>
+                        <button id="geo-promo-locate" type="button">Usar minha localização e buscar</button>
+                    </div>
+                    <div id="geo-promo-status" class="geo-promo-status">Sua localização só será usada no aparelho para calcular a distância.</div>
+                    <div id="geo-promo-results"></div>
+                </div>
+            </section>
+
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="faltando">A Comprar</button>
+                <button class="tab-btn" data-tab="comprados">Comprados</button>
+                <button class="tab-btn" data-tab="adiados">Adiados</button>
+                <button class="tab-btn" data-tab="relatorios">Relatórios</button>
+            </div>
+            <div id="lista-faltando-container" class="list-container active"><ul id="lista-faltando" class="item-list"></ul></div>
+            <div id="lista-comprados-container" class="list-container"><ul id="lista-comprados" class="item-list"></ul></div>
+            <div id="lista-adiados-container" class="list-container"><ul id="lista-adiados" class="item-list"></ul></div>
+            <div id="lista-relatorios-container" class="list-container"><ul id="lista-relatorios" class="item-list"></ul></div>
+        </main>
+
+        <footer class="calculator-footer">
+            <button id="toggle-calc-btn" title="Mostrar/Ocultar Calculadora"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg></button>
+            <div class="calculator-body">
+                <div class="calculator-display-wrapper">
+                    <div id="active-item-display">Nenhum item selecionado</div>
+                    <div id="calc-display">0</div>
+                </div>
+                <div class="keypad">
+                    <button>7</button><button>8</button><button>9</button><button class="operator" data-action="multiply">×</button>
+                    <button>4</button><button>5</button><button>6</button><button class="operator" data-action="subtract">−</button>
+                    <button>1</button><button>2</button><button>3</button><button class="action" data-action="add">+</button>
+                    <button class="clear" data-action="clear">C</button><button>0</button><button data-action="decimal">.</button><button class="operator" data-action="divide">÷</button>
+                </div>
+            </div>
+        </footer>
     </div>
-  </main>
 
-  <footer class="footer"><div class="shell">Powered by <strong>thIAguinho Soluções Digitais</strong> · Mercador IA V1.0.0</div></footer>
+    <div id="report-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div style="margin-bottom: 15px;">
+                <label for="purchase-location" style="display: block; margin-bottom: 5px; font-size: 0.9rem; color: var(--cor-texto-secundario);">Local da Compra:</label>
+                <input type="text" id="purchase-location" placeholder="Ex: Supermercado Central" style="width: 100%; box-sizing: border-box; padding: 10px; border-radius: 8px; border: 1px solid var(--cor-borda); font-size: 1rem;">
+            </div>
+            <div id="report-paper"></div>
+            <div class="modal-actions" style="justify-content: space-between;">
+                <div><button id="download-report-btn">Baixar</button><button id="print-report-btn">Imprimir</button></div>
+                <div><button id="close-modal-btn">Fechar</button><button id="finalize-purchase-btn" class="btn btn-success" style="padding: 8px 12px; font-size: 1rem; width: auto; height: auto;">Finalizar Compra</button></div>
+            </div>
+        </div>
+    </div>
 
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
-  <script src="./js/firebase-config.js?v=1.0.0"></script>
-  <script src="./js/utils.js?v=1.0.0"></script>
-  <script src="./js/auth.js?v=1.0.0"></script>
-  <script src="./js/smart-matcher.js?v=1.0.0"></script>
-  <script src="./js/usuario.js?v=1.0.0"></script>
-  <script src="./js/pwa.js?v=1.0.0"></script>
+    <div id="report-view-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="margin-top: 0;">Relatório de Compra</h3>
+            <div id="report-view-content"></div>
+            <div class="modal-actions">
+                <button id="close-view-modal-btn">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    
+    // Nenhuma configuração de API ou inicialização do Firebase aqui.
+    // Tudo é gerenciado pelo `firebase-config.js` carregado no <head>.
+    
+    let listRef = null;
+    let reportsRef = null;
+    let userId = null;
+
+    auth.onAuthStateChanged(async user => {
+        if (user) {
+            try {
+                const profile = await window.MercadorIA.ensureAuthenticatedProfile(user);
+                if (!profile || profile.status !== 'active') throw new Error('Sua conta está bloqueada.');
+                userId = user.uid;
+                listRef = database.ref(`shopping_lists/${userId}`);
+                reportsRef = database.ref(`purchase_reports/${userId}`);
+                document.querySelector('.app-container').classList.add('loaded');
+                interactions.initDataListeners();
+            } catch (error) {
+                document.body.innerHTML = `<div style="padding:20px;text-align:center"><h2>Acesso Negado</h2><p>${String(error.message || error)}</p><p><a href="./index.html">Voltar ao login</a></p></div>`;
+            }
+        } else {
+            window.location.replace('./index.html');
+        }
+    });
+
+    // --- O restante do seu código original, 100% preservado e com a formatação correta ---
+
+    const state = {
+        itens: [],
+        reports: [],
+        activeItemId: null,
+        calcDisplay: '0',
+        currentTab: 'faltando',
+        ui: { isCalculatorCollapsed: false },
+    };
+
+    const ui = {
+        appContainer: document.querySelector('.app-container'),
+        calculatorFooter: document.querySelector('.calculator-footer'),
+        toggleCalcBtn: document.getElementById('toggle-calc-btn'),
+        form: document.getElementById('form-adicionar-item'),
+        input: document.getElementById('input-novo-item'),
+        headerTotal: document.getElementById('header-total'),
+        calcDisplay: document.getElementById('calc-display'),
+        activeItemDisplay: document.getElementById('active-item-display'),
+        keypad: document.querySelector('.keypad'),
+        tabs: document.querySelector('.tabs'),
+        btnFinalizar: document.getElementById('btn-finalizar'),
+        reportModal: document.getElementById('report-modal'),
+        reportPaper: document.getElementById('report-paper'),
+        purchaseLocationInput: document.getElementById('purchase-location'),
+        closeModalBtn: document.getElementById('close-modal-btn'),
+        printReportBtn: document.getElementById('print-report-btn'),
+        downloadReportBtn: document.getElementById('download-report-btn'),
+        finalizePurchaseBtn: document.getElementById('finalize-purchase-btn'),
+        reportViewModal: document.getElementById('report-view-modal'),
+        reportViewContent: document.getElementById('report-view-content'),
+        closeViewModalBtn: document.getElementById('close-view-modal-btn'),
+    };
+
+    const emojiMap = {
+        'leite': '🥛', 'queijo': '🧀', 'manteiga': '🧈', 'ovo': '🥚', 'bacon': '🥓', 'pao': '🍞', 'pão': '🍞',
+        'baguete': '🥖', 'croissant': '🥐', 'pretzel': '🥨', 'bagel': '🥯', 'panqueca': '🥞', 'waffle': '🧇',
+        'arroz': '🍚', 'cereal': '🥣', 'feijao': '🫘', 'feijão': '🫘', 'macarrao': '🍝', 'macarrão': '🍝',
+        'massa': '🍝', 'ramen': '🍜', 'pao sirio': '🫓', 'pão sírio': '🫓', 'carne': '🥩', 'pernil': '🍖',
+        'frango': '🍗', 'peixe': '🐟', 'salsicha': '🌭', 'camarao': '🍤', 'camarão': '🍤', 'lula': '🦑',
+        'lagosta': '🦞', 'caranguejo': '🦀', 'ostra': '🦪', 'sushi': '🍣', 'maca': '🍎', 'maçã': '🍎',
+        'maca verde': '🍏', 'maçã verde': '🍏', 'pera': '🍐', 'pêra': '🍐', 'banana': '🍌', 'laranja': '🍊',
+        'limao': '🍋‍🟩', 'limão': '🍋‍🟩', 'uva': '🍇', 'morango': '🍓', 'melancia': '🍉', 'abacaxi': '🍍',
+        'manga': '🥭', 'pessego': '🍑', 'pêssego': '🍑', 'cereja': '🍒', 'kiwi': '🥝', 'melao': '🍈',
+        'melão': '🍈', 'coco': '🥥', 'mirtilo': '🫐', 'tomate': '🍅', 'cenoura': '🥕', 'batata': '🥔',
+        'batata doce': '🍠', 'cebola': '🧅', 'alho': '🧄', 'alface': '🥬', 'brocolis': '🥦', 'brócolis': '🥦',
+        'milho': '🌽', 'pepino': '🥒', 'berinjela': '🍆', 'abacate': '🥑', 'pimentao': '🫑', 'pimentão': '🫑',
+        'pimenta': '🌶️', 'cogumelo': '🍄', 'gengibre': '🫚', 'ervilha': '🫛', 'salada': '🥗', 'azeitona': '🫒',
+        'ervas': '🌿', 'hortela': '🍃', 'hortelã': '🍃', 'amendoim': '🥜', 'castanha': '🌰', 'sal': '🧂',
+        'oleo': '🫗', 'óleo': '🫗', 'mel': '🍯', 'enlatado': '🥫', 'conserva': '🫙', 'cafe': '☕️', 'café': '☕️',
+        'cha': '🍵', 'chá': '🍵', 'chimarrao': '🧉', 'chimarrão': '🧉', 'suco': '🧃', 'refrigerante': '🥤',
+        'agua': '💧', 'água': '💧', 'gelo': '🧊', 'cerveja': '🍺', 'vinho': '🍷', 'espumante': '🍾',
+        'whisky': '🥃', 'coquetel': '🍸', 'drink': '🍹', 'chocolate': '🍫', 'doce': '🍬', 'pirulito': '🍭',
+        'biscoito': '🍪', 'biscoito da sorte': '🥠', 'bolo': '🍰', 'bolo de aniversario': '🎂',
+        'bolo de aniversário': '🎂', 'cupcake': '🧁', 'torta': '🥧', 'sorvete': '🍦', 'sorvete de taca': '🍨',
+        'sorvete de taça': '🍨', 'raspadinha': '🍧', 'donut': '🍩', 'pudim': '🍮', 'pipoca': '🍿',
+        'pizza': '🍕', 'hamburguer': '🍔', 'hambúrguer': '🍔', 'batata frita': '🍟', 'sanduiche': '🥪',
+        'sanduíche': '🥪', 'taco': '🌮', 'burrito': '🌯', 'kebab': '🥙', 'falafel': '🧆', 'onigiri': '🍙',
+        'comida chinesa': '🥡', 'fondue': '🫕', 'sabao': '🧼', 'sabão': '🧼', 'detergente': '🧴', 'esponja': '🧽',
+        'limpeza': '🧹', 'vassoura': '🧹', 'balde': '🪣', 'cesto': '🧺', 'saco de lixo': '🗑️', 'shampoo': '🧴',
+        'papel': '🧻', 'papel higienico': '🧻', 'papel higiênico': '🧻', 'escova de dentes': '🪥',
+        'lamina de barbear': '🪒', 'lâmina de barbear': '🪒', 'curativo': '🩹', 'remedio': '💊',
+        'remédio': '💊', 'racao para pet': '🦴', 'ração para pet': '🦴', 'cigarro': '🚬', 'vela': '🕯️',
+        'lampada': '💡', 'lâmpada': '💡', 'pilha': '🔋', 'planta': '🪴', 'default': '🛒'
+    };
+    
+    const getEmojiForItem = (nome) => { const nomeLower = nome.toLowerCase(); for (const key in emojiMap) if (nomeLower.includes(key)) return emojiMap[key]; return emojiMap.default; };
+    
+    const store = { 
+        loadUI: () => {
+             const savedState = localStorage.getItem(`uiState-${userId}`);
+             if (savedState) state.ui = JSON.parse(savedState);
+        },
+        saveUI: () => localStorage.setItem(`uiState-${userId}`, JSON.stringify(state.ui)) 
+    };
+
+    const render = {
+        all: () => {
+            render.calculator();
+            render.lists();
+            render.reports();
+            render.total();
+            render.activeItemHighlight();
+            render.calculatorDisplay();
+            render.activeItemDisplay();
+            render.tabs();
+        },
+        calculator: () => ui.calculatorFooter.classList.toggle('collapsed', state.ui.isCalculatorCollapsed),
+        lists: () => {
+            const lists = { faltando: document.getElementById('lista-faltando'), comprados: document.getElementById('lista-comprados'), adiados: document.getElementById('lista-adiados') };
+            Object.values(lists).forEach(list => list.innerHTML = '');
+            const groups = { faltando: [], comprado: [], adiado: [] };
+            state.itens.forEach(item => { if (groups[item.status]) groups[item.status].push(item) });
+            const createListContent = (listEl, items, message) => {
+                if (items.length === 0) listEl.innerHTML = `<p style="text-align:center; padding: 20px;">${message}</p>`;
+                else items.sort((a,b) => a.id - b.id).forEach(item => listEl.appendChild(render.createItemElement(item)));
+            };
+            createListContent(lists.faltando, groups.faltando, 'Nada para comprar!');
+            createListContent(lists.comprados, groups.comprado, 'Carrinho vazio.');
+            createListContent(lists.adiados, groups.adiado, 'Nenhum item adiado.');
+        },
+        createItemElement: (item) => {
+            const li = document.createElement('li');
+            li.className = `item-row status-${item.status}`;
+            li.dataset.id = item.id;
+            const priceInfo = item.status === 'comprado' ? `<div class="item-price-info">${item.quantidade} × R$ ${item.preco.toFixed(2)} = R$ ${(item.quantidade * item.preco).toFixed(2)}</div>` : '';
+            li.innerHTML = `<span class="item-emoji">${item.emoji}</span><div class="item-details"><div class="item-name">${item.nome}</div>${priceInfo}</div><button class="delete-btn" data-id="${item.id}"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>`;
+            return li;
+        },
+        reports: () => {
+            const listEl = document.getElementById('lista-relatorios');
+            listEl.innerHTML = '';
+            if (state.reports.length === 0) {
+                listEl.innerHTML = `<p style="text-align:center; padding: 20px;">Nenhum relatório salvo.</p>`;
+                return;
+            }
+            state.reports.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).forEach(report => {
+                const li = document.createElement('li');
+                li.className = 'report-item';
+                li.dataset.id = report.id;
+                const reportDate = new Date(report.createdAt).toLocaleString('pt-BR');
+                const location = report.location ? report.location : 'Local não informado';
+                li.innerHTML = `
+                    <div class="report-details" style="cursor:pointer;">
+                        <div class="report-location">${location}</div>
+                        <div class="report-date" style="font-size:0.9rem; font-weight: 400;">${reportDate}</div>
+                        <div class="report-total">Total: R$ ${report.total.toFixed(2)}</div>
+                    </div>
+                    <button class="delete-report-btn" data-id="${report.id}" title="Excluir Relatório">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
+                `;
+                listEl.appendChild(li);
+            });
+        },
+        total: () => { const total = state.itens.filter(i => i.status === 'comprado').reduce((acc, item) => acc + (item.preco * item.quantidade), 0); ui.headerTotal.textContent = `R$ ${total.toFixed(2)}`; },
+        activeItemHighlight: () => document.querySelectorAll('.item-row').forEach(row => row.classList.toggle('active', row.dataset.id == state.activeItemId)),
+        calculatorDisplay: () => ui.calcDisplay.textContent = state.calcDisplay.replace('.', ','),
+        activeItemDisplay: () => { const activeItem = state.itens.find(i => i.id == state.activeItemId); ui.activeItemDisplay.textContent = activeItem ? activeItem.nome : 'Nenhum item selecionado'; },
+        tabs: () => { const adiadosTab = document.querySelector('[data-tab="adiados"]'); if (state.activeItemId && state.itens.find(i => i.id == state.activeItemId)?.status === 'faltando') { adiadosTab.classList.add('action-mode'); adiadosTab.textContent = 'Adiar Item'; } else { adiadosTab.classList.remove('action-mode'); adiadosTab.textContent = 'Adiados'; } }
+    };
+
+    const calculator = {
+        handleInput: (key, action) => {
+            if (action === 'clear') { state.calcDisplay = '0'; }
+            else if (action === 'decimal' && !state.calcDisplay.includes('.')) { state.calcDisplay += '.'; }
+            else if (action === 'add') { calculator.register(); }
+            else if (['subtract', 'multiply', 'divide'].includes(action)) { const op = {'subtract': '-', 'multiply': '×', 'divide': '÷'}[action]; state.calcDisplay += ` ${op} `; }
+            else if (key.match(/^[0-9]$/)) { if (state.calcDisplay === '0') { state.calcDisplay = key; } else { state.calcDisplay += key; } }
+            render.calculatorDisplay();
+        },
+        register: () => {
+            if (!state.activeItemId) return;
+            const item = state.itens.find(i => i.id == state.activeItemId); if (!item) return;
+            const expression = state.calcDisplay.replace(/,/g, '.').replace(/×/g, '*').replace(/÷/g, '/');
+            let qty = 1; let price = 0;
+            const registerRegex = /^(\d+\.?\d*)\s*[*x]\s*(\d+\.?\d*)$/;
+            if (registerRegex.test(expression)) { const matches = expression.match(registerRegex); qty = parseFloat(matches[1]); price = parseFloat(matches[2]); }
+            else { try { price = eval(expression); } catch (e) { price = NaN; } }
+            if (isNaN(price) || price < 0) { state.calcDisplay = '0'; render.calculatorDisplay(); return; }
+            interactions.updateItem(item.id, { status: 'comprado', quantidade: qty, preco: price });
+            const currentIndex = state.itens.findIndex(i => i.id == state.activeItemId);
+            const nextItem = state.itens.find((i, index) => i.status === 'faltando' && index > currentIndex);
+            state.activeItemId = nextItem ? nextItem.id : null;
+            state.calcDisplay = '0';
+            if(state.activeItemId) { setTimeout(() => { const nextElement = document.querySelector(`[data-id='${state.activeItemId}']`); if(nextElement) nextElement.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 300); }
+        }
+    };
+
+    const interactions = {
+        initDataListeners: () => {
+            if (!listRef) return;
+            store.loadUI();
+            render.calculator();
+            listRef.on('value', (snapshot) => { const data = snapshot.val(); state.itens = data ? Object.keys(data).map(key => ({ ...data[key], id: key })) : []; render.all(); });
+            reportsRef.on('value', (snapshot) => { const data = snapshot.val(); state.reports = data ? Object.keys(data).map(key => ({ ...data[key], id: key })) : []; render.reports(); });
+        },
+        addItem: (e) => { e.preventDefault(); const nome = ui.input.value.trim(); if (nome) { const newItemId = Date.now(); listRef.child(newItemId).set({ id: newItemId, nome: nome, emoji: getEmojiForItem(nome), status: 'faltando', quantidade: 1, preco: 0 }); ui.input.value = ''; ui.input.focus(); } },
+        deleteItem: (id) => { if (confirm('Tem certeza que deseja remover este item?')) { if (state.activeItemId === id) state.activeItemId = null; listRef.child(id).remove(); } },
+        deleteReport: (reportId) => {
+            if (confirm('Tem certeza que deseja excluir este relatório? Esta ação não pode ser desfeita.')) {
+                reportsRef.child(reportId).remove()
+                    .catch(err => alert('Erro ao excluir relatório.'));
+            }
+        },
+        updateItem: (id, updates) => listRef.child(id).update(updates),
+        handleItemClick: (id, status) => { if (status === 'faltando') interactions.selectItem(id); if (status === 'comprado') interactions.updateItem(id, { status: 'faltando', preco: 0, quantidade: 1 }); if (status === 'adiado') interactions.updateItem(id, { status: 'faltando' }); },
+        selectItem: (id) => { state.activeItemId = (state.activeItemId === id) ? null : id; state.calcDisplay = '0'; render.all(); },
+        handleTabClick: (tabName) => {
+            if (tabName === 'adiados' && state.activeItemId) {
+                const item = state.itens.find(i => i.id == state.activeItemId);
+                if (item && item.status === 'faltando') { interactions.updateItem(state.activeItemId, { status: 'adiado' }); state.activeItemId = null; return; }
+            }
+            interactions.switchTab(tabName);
+        },
+        switchTab: (tabName) => {
+            state.currentTab = tabName;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.list-container').forEach(cont => cont.classList.remove('active'));
+            document.querySelector(`[data-tab='${tabName}']`).classList.add('active');
+            document.getElementById(`lista-${tabName}-container`).classList.add('active');
+        },
+        toggleCalculator: () => { state.ui.isCalculatorCollapsed = !state.ui.isCalculatorCollapsed; store.saveUI(); render.calculator(); },
+        openReportModal: () => {
+            const faltando = state.itens.filter(i => i.status === 'faltando');
+            if (faltando.length > 0) {
+                 const userConfirmed = confirm('Você tem certeza que quer adiar os itens em lista e finalizar a compra?');
+                if (!userConfirmed) {
+                    return;
+                }
+            }
+            const comprados = state.itens.filter(i => i.status === 'comprado'); 
+            if (comprados.length === 0) { 
+                alert('Nenhum item foi comprado ainda.'); 
+                return; 
+            }
+            const total = comprados.reduce((acc, i) => acc + (i.preco * i.quantidade), 0);
+            let reportText = `*** CUPOM FISCAL ***\n\nDATA: ${new Date().toLocaleString('pt-BR')}\n--------------------------------\nITEM      QTD    PREÇO    TOTAL\n--------------------------------\n`;
+            comprados.forEach(i => { reportText += `${i.nome.substring(0, 8).padEnd(8)} ${String(i.quantidade).padStart(4)} x ${i.preco.toFixed(2).padStart(8)} = ${(i.quantidade * i.preco).toFixed(2).padStart(8)}\n`; });
+            reportText += `--------------------------------\nTOTAL A PAGAR: R$ ${total.toFixed(2)}\n\n***** thIAguinho Soluções *****`;
+            ui.reportPaper.textContent = reportText;
+            ui.purchaseLocationInput.value = '';
+            ui.reportModal.classList.add('visible');
+        },
+        finalizeAndReset: () => {
+            const comprados = state.itens.filter(i => i.status === 'comprado');
+            if (comprados.length === 0) {
+                ui.reportModal.classList.remove('visible');
+                return;
+            }
+
+            const location = ui.purchaseLocationInput.value.trim();
+            const total = comprados.reduce((acc, i) => acc + (i.preco * i.quantidade), 0);
+            
+            let reportText = `*** CUPOM FISCAL ***\n\nLOCAL: ${location || 'Não informado'}\nDATA: ${new Date().toLocaleString('pt-BR')}\n--------------------------------\nITEM      QTD    PREÇO    TOTAL\n--------------------------------\n`;
+            comprados.forEach(i => { reportText += `${i.nome.substring(0, 8).padEnd(8)} ${String(i.quantidade).padStart(4)} x ${i.preco.toFixed(2).padStart(8)} = ${(i.quantidade * i.preco).toFixed(2).padStart(8)}\n`; });
+            reportText += `--------------------------------\nTOTAL A PAGAR: R$ ${total.toFixed(2)}\n\n***** thIAguinho Soluções *****`;
+
+            const reportData = {
+                content: reportText,
+                location: location || 'Não informado',
+                total: total,
+                createdAt: new Date().toISOString()
+            };
+
+            reportsRef.push(reportData).then(() => {
+                const aAdiar = state.itens.filter(i => i.status === 'adiado' || i.status === 'faltando');
+                const newItems = {};
+                if (aAdiar.length > 0) {
+                    aAdiar.forEach(item => {
+                        const oldId = item.id;
+                        let newItemData = { ...item };
+                        delete newItemData.id;
+                        newItemData.status = 'faltando';
+                        newItemData.preco = 0;
+                        newItemData.quantidade = 1;
+                        newItems[oldId] = newItemData;
+                    });
+                }
+                listRef.set(newItems);
+            }).catch(error => {
+                console.error("Erro ao finalizar a compra:", error);
+                alert("Ocorreu um erro. Verifique sua conexão e tente novamente.");
+            });
+
+            ui.reportModal.classList.remove('visible');
+            interactions.switchTab('faltando');
+        },
+        showReport: (reportId) => {
+            const report = state.reports.find(r => r.id === reportId);
+            if(report) {
+                ui.reportViewContent.textContent = report.content;
+                ui.reportViewModal.classList.add('visible');
+            }
+        },
+        downloadReport: () => { 
+            const location = ui.purchaseLocationInput.value.trim();
+            const currentReportText = ui.reportPaper.textContent;
+            const updatedReportText = currentReportText.replace('*** CUPOM FISCAL ***', `*** CUPOM FISCAL ***\n\nLOCAL: ${location || 'Não informado'}`);
+            const blob = new Blob([updatedReportText], {type: 'text/plain'}); 
+            const a = document.createElement('a'); 
+            a.href = URL.createObjectURL(blob); 
+            a.download = 'relatorio_compras.txt'; 
+            a.click(); 
+        },
+        printReport: () => { 
+            const location = ui.purchaseLocationInput.value.trim();
+            const currentReportText = ui.reportPaper.textContent;
+            const updatedReportText = currentReportText.replace('*** CUPOM FISCAL ***', `*** CUPOM FISCAL ***\n\nLOCAL: ${location || 'Não informado'}`);
+            const win = window.open('', '_blank'); 
+            win.document.write(`<html><head><title>Relatório de Compra</title></head><body><pre>${updatedReportText}</pre></body></html>`); 
+            win.document.close(); 
+            win.print(); 
+        }
+    };
+    
+    ui.form.addEventListener('submit', interactions.addItem);
+    ui.keypad.addEventListener('click', e => { if (e.target.tagName === 'BUTTON') calculator.handleInput(e.target.textContent, e.target.dataset.action); });
+    ui.tabs.addEventListener('click', e => { if (e.target.tagName === 'BUTTON') interactions.handleTabClick(e.target.dataset.tab); });
+    document.getElementById('lista-relatorios').addEventListener('click', e => {
+        const deleteBtn = e.target.closest('.delete-report-btn');
+        if (deleteBtn) { interactions.deleteReport(deleteBtn.dataset.id); return; }
+        const reportRow = e.target.closest('.report-item');
+        if (reportRow) { interactions.showReport(reportRow.dataset.id); }
+    });
+    ui.appContainer.addEventListener('click', e => {
+        const row = e.target.closest('.item-row'); if (!row) return;
+        const id = row.dataset.id;
+        const item = state.itens.find(i => i.id === id); if (!item) return;
+        if (e.target.closest('.delete-btn')) { interactions.deleteItem(id); } else { interactions.handleItemClick(id, item.status); }
+    });
+    ui.btnFinalizar.addEventListener('click', interactions.openReportModal);
+    ui.closeModalBtn.addEventListener('click', () => ui.reportModal.classList.remove('visible'));
+    ui.closeViewModalBtn.addEventListener('click', () => ui.reportViewModal.classList.remove('visible'));
+    ui.downloadReportBtn.addEventListener('click', interactions.downloadReport);
+    ui.printReportBtn.addEventListener('click', interactions.printReport);
+    ui.finalizePurchaseBtn.addEventListener('click', interactions.finalizeAndReset);
+    ui.toggleCalcBtn.addEventListener('click', interactions.toggleCalculator);
+    document.getElementById('back-button').addEventListener('click', async (e) => { e.preventDefault(); await window.MercadorIA.logout(); });
+});
+
+let newWorker;
+function showUpdateBar() {
+    const banner = document.getElementById('update-banner');
+    banner.style.display = 'block';
+    document.getElementById('update-btn').addEventListener('click', () => {
+        newWorker.postMessage({ action: 'skipWaiting' });
+    });
+}
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./service-worker.js").then(reg => {
+            reg.addEventListener('updatefound', () => {
+                newWorker = reg.installing;
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        showUpdateBar();
+                    }
+                });
+            });
+        });
+        let refreshing;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (refreshing) return;
+            window.location.reload();
+            refreshing = true;
+        });
+    });
+}
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    document.getElementById('install-banner').style.display = 'flex';
+});
+document.addEventListener('click', async (e) => {
+    if (e.target && e.target.id === 'install-btn') {
+        document.getElementById('install-banner').style.display = 'none';
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+        deferredPrompt = null;
+    }
+    if (e.target && e.target.id === 'dismiss-btn') {
+        document.getElementById('install-banner').style.display = 'none';
+    }
+});
+window.addEventListener('appinstalled', () => {
+    document.getElementById('install-banner').style.display = 'none';
+    deferredPrompt = null;
+});
+</script>
+    <script src="./js/lista-promocoes.js?v=1.2.0"></script>
 </body>
 </html>

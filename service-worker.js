@@ -1,9 +1,9 @@
-const CACHE = 'mercador-ia-shell-v1.0.0';
+const CACHE = 'mercador-ia-shell-v1.2.0';
 const SHELL = [
   './', './index.html', './cadastro.html', './admin.html', './usuario.html',
   './css/app.css', './css/auth.css', './css/admin.css', './css/user.css',
   './js/firebase-config.js', './js/utils.js', './js/auth.js', './js/smart-matcher.js',
-  './js/index.js', './js/cadastro.js', './js/admin.js', './js/usuario.js', './js/pwa.js',
+  './js/index.js', './js/cadastro.js', './js/admin.js', './js/usuario.js', './js/lista-promocoes.js', './js/pwa.js',
   './manifest.webmanifest', './assets/icon.svg', './assets/icon-192.png', './assets/icon-512.png'
 ];
 
