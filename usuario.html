@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07120d">
+  <meta name="description" content="Lista inteligente Mercador IA com promoções verificadas próximas.">
+  <title>Mercador IA — Minha Lista</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./css/app.css?v=1.0.0">
+  <link rel="stylesheet" href="./css/user.css?v=1.0.0">
+</head>
+<body>
+  <div id="loading" class="loading-screen"><div class="loading-box"><div class="spinner"></div><strong>Carregando sua lista inteligente...</strong></div></div>
+
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <a class="brand" href="./usuario.html"><span class="brand-mark">M</span><span>Mercador IA<span class="brand-sub">Minha lista inteligente</span></span></a>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="badge ok" id="syncBadge">tempo real</span>
+        <button class="btn btn-ghost btn-sm" id="logoutBtn" type="button">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="shell">
+      <section class="user-hero">
+        <div class="card smart-banner">
+          <div>
+            <div class="eyebrow">Lista inteligente</div>
+            <h1 id="userGreeting">Sua compra começa antes de chegar ao mercado.</h1>
+            <p class="muted">Cadastre o que precisa. Quando você autorizar a localização, o Mercador IA procura promoções verificadas dos itens da sua lista dentro do raio escolhido.</p>
+          </div>
+          <div class="auto-grid" style="position:relative;z-index:1">
+            <div><span class="kpi-label">A comprar</span><div class="kpi-value" id="pendingCount" style="font-size:2rem">0</div></div>
+            <div><span class="kpi-label">Ofertas encontradas</span><div class="kpi-value" id="offerCount" style="font-size:2rem">0</div></div>
+            <div><span class="kpi-label">Economia potencial</span><div class="kpi-value" id="savingTotal" style="font-size:1.65rem">R$ 0,00</div></div>
+          </div>
+        </div>
+
+        <div class="card location-box">
+          <div>
+            <div class="eyebrow">Proximidade real</div>
+            <h2 style="margin:7px 0 10px">Promoções perto de você</h2>
+            <div class="location-status"><span class="dot" id="locationDot"></span><div><strong id="locationTitle">Localização ainda não autorizada</strong><div class="small muted" id="locationText">Toque no botão abaixo para calcular mercados próximos.</div></div></div>
+          </div>
+          <div>
+            <div class="radius-row" style="margin-bottom:10px"><label class="small muted" for="radiusSelect">Raio:</label><select class="select" id="radiusSelect"><option value="1">1 km</option><option value="3">3 km</option><option value="5" selected>5 km</option><option value="10">10 km</option><option value="25">25 km</option></select></div>
+            <button class="btn btn-primary btn-mobile-full" id="locateBtn" type="button">📍 Usar minha localização</button>
+            <p class="field-help" style="margin:10px 0 0">Nesta versão, a latitude/longitude usada no cálculo não é gravada no Firebase.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="user-main">
+        <div class="card">
+          <div class="card-header"><div><div class="eyebrow">Sua lista</div><h2 style="margin:5px 0 0">O que falta comprar</h2></div><span class="badge info" id="listCountBadge">0 itens</span></div>
+          <div class="card-body">
+            <form id="quickAddForm" class="quick-add">
+              <input class="input" id="itemName" required maxlength="120" placeholder="Ex.: Chocolate">
+              <input class="input" id="itemQuantity" type="number" min="1" max="999" step="1" value="1" aria-label="Quantidade">
+              <button class="btn btn-primary" type="submit">+ Adicionar</button>
+            </form>
+            <div class="form-grid" style="margin-top:10px">
+              <div class="field"><label for="itemPriority">Prioridade padrão</label><select class="select" id="itemPriority"><option value="normal">Normal</option><option value="high">Alta</option><option value="low">Baixa</option></select></div>
+              <div class="field"><label for="itemNote">Observação opcional</label><input class="input" id="itemNote" maxlength="120" placeholder="Ex.: preferir sem açúcar"></div>
+            </div>
+            <div id="shoppingList" class="list" style="margin-top:16px"></div>
+            <div style="margin-top:14px"><button class="btn btn-ghost btn-sm" id="clearBoughtBtn" type="button">Remover itens já comprados</button></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div><div class="eyebrow">Correspondência inteligente</div><h2 style="margin:5px 0 0">Promoções da sua lista</h2></div><span class="badge ok" id="offerStatusBadge">aguardando localização</span></div>
+          <div class="card-body">
+            <div id="offersList" class="list"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer"><div class="shell">Powered by <strong>thIAguinho Soluções Digitais</strong> · Mercador IA V1.0.0</div></footer>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
+  <script src="./js/firebase-config.js?v=1.0.0"></script>
+  <script src="./js/utils.js?v=1.0.0"></script>
+  <script src="./js/auth.js?v=1.0.0"></script>
+  <script src="./js/smart-matcher.js?v=1.0.0"></script>
+  <script src="./js/usuario.js?v=1.0.0"></script>
+  <script src="./js/pwa.js?v=1.0.0"></script>
+</body>
+</html>

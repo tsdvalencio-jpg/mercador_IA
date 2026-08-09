@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07120d">
+  <title>Mercador IA — Administração</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./css/app.css?v=1.0.0">
+  <link rel="stylesheet" href="./css/admin.css?v=1.0.0">
+</head>
+<body>
+  <div id="loading" class="loading-screen"><div class="loading-box"><div class="spinner"></div><strong>Validando acesso administrativo...</strong></div></div>
+
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <a class="brand" href="./admin.html"><span class="brand-mark">M</span><span>Mercador IA<span class="brand-sub">SuperAdmin</span></span></a>
+      <div style="display:flex;align-items:center;gap:9px">
+        <span class="badge ok" id="adminRoleBadge">carregando</span>
+        <button class="btn btn-ghost btn-sm" id="logoutBtn" type="button">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="admin-layout">
+    <aside class="admin-sidebar">
+      <nav class="admin-nav" aria-label="Administração">
+        <button class="active" data-section="dashboard">▦ Dashboard</button>
+        <button data-section="users">👥 Usuários</button>
+        <button data-section="markets">🏪 Mercados</button>
+        <button data-section="units">📍 Unidades</button>
+        <button data-section="promotions">🔥 Promoções</button>
+        <button data-section="inbox">📥 Caixa de entrada</button>
+        <button data-section="audit">🛡️ Auditoria</button>
+      </nav>
+      <div class="security-note" style="margin-top:18px">Valores promocionais só são publicados quando marcados como conferidos. O sistema não inclui preços fictícios automaticamente.</div>
+    </aside>
+
+    <section class="admin-content">
+      <section id="section-dashboard" class="admin-section active">
+        <div class="page-heading">
+          <div><div class="eyebrow">Visão geral</div><h1>Painel administrativo</h1><p class="muted" id="adminWelcome">Carregando perfil...</p></div>
+          <button class="btn btn-primary" data-open-modal="promotionModal">+ Nova promoção</button>
+        </div>
+        <div class="grid grid-4">
+          <div class="card kpi"><span class="kpi-label">Usuários ativos</span><strong class="kpi-value" id="kpiUsers">0</strong><span class="kpi-foot">Contas com acesso ativo</span></div>
+          <div class="card kpi"><span class="kpi-label">Mercados ativos</span><strong class="kpi-value" id="kpiMarkets">0</strong><span class="kpi-foot">Redes/estabelecimentos</span></div>
+          <div class="card kpi"><span class="kpi-label">Unidades ativas</span><strong class="kpi-value" id="kpiUnits">0</strong><span class="kpi-foot">Pontos com geolocalização</span></div>
+          <div class="card kpi"><span class="kpi-label">Promoções válidas</span><strong class="kpi-value" id="kpiPromos">0</strong><span class="kpi-foot">Ativas, conferidas e no prazo</span></div>
+        </div>
+        <div class="grid grid-2" style="margin-top:16px">
+          <div class="card card-pad"><div class="eyebrow">Qualidade dos dados</div><h2 style="margin-top:8px">Publicação responsável</h2><p class="muted">Toda promoção exige mercado, unidade, produto, preço real informado, período de validade, origem e confirmação manual do valor. Promoção não conferida não aparece ao consumidor.</p><div id="qualitySummary" class="list"></div></div>
+          <div class="card card-pad"><div class="eyebrow">Operação</div><h2 style="margin-top:8px">Ações rápidas</h2><div class="auto-grid"><button class="btn btn-secondary" data-open-modal="userModal">+ Usuário</button><button class="btn btn-secondary" data-open-modal="marketModal">+ Mercado</button><button class="btn btn-secondary" data-open-modal="unitModal">+ Unidade</button><button class="btn btn-primary" data-open-modal="promotionModal">+ Promoção</button></div></div>
+        </div>
+      </section>
+
+      <section id="section-users" class="admin-section">
+        <div class="page-heading"><div><div class="eyebrow">Acessos</div><h1>Usuários</h1><p class="muted">Cadastre consumidores e controle o status das contas.</p></div><button class="btn btn-primary" data-open-modal="userModal">+ Novo usuário</button></div>
+        <div class="admin-toolbar"><input class="input searchbox" id="userSearch" placeholder="Buscar nome ou e-mail"><span class="badge info" id="userCountBadge">0 usuários</span></div>
+        <div id="usersList" class="list"></div>
+      </section>
+
+      <section id="section-markets" class="admin-section">
+        <div class="page-heading"><div><div class="eyebrow">Base universal</div><h1>Mercados</h1><p class="muted">Cadastre redes ou estabelecimentos. As unidades recebem endereço e coordenadas.</p></div><button class="btn btn-primary" data-open-modal="marketModal">+ Novo mercado</button></div>
+        <div class="admin-toolbar"><input class="input searchbox" id="marketSearch" placeholder="Buscar mercado"><span class="badge info" id="marketCountBadge">0 mercados</span></div>
+        <div id="marketsList" class="list"></div>
+      </section>
+
+      <section id="section-units" class="admin-section">
+        <div class="page-heading"><div><div class="eyebrow">Geolocalização</div><h1>Unidades</h1><p class="muted">Cada unidade possui latitude e longitude reais usadas no cálculo de distância.</p></div><button class="btn btn-primary" data-open-modal="unitModal">+ Nova unidade</button></div>
+        <div class="admin-toolbar"><input class="input searchbox" id="unitSearch" placeholder="Buscar unidade, cidade ou endereço"><span class="badge info" id="unitCountBadge">0 unidades</span></div>
+        <div id="unitsList" class="list"></div>
+      </section>
+
+      <section id="section-promotions" class="admin-section">
+        <div class="page-heading"><div><div class="eyebrow">Ofertas verificadas</div><h1>Promoções</h1><p class="muted">Somente promoções ativas, conferidas e dentro da validade são exibidas aos usuários.</p></div><button class="btn btn-primary" data-open-modal="promotionModal">+ Nova promoção</button></div>
+        <div class="admin-toolbar"><div class="toolbar-left"><input class="input searchbox" id="promoSearch" placeholder="Buscar produto, marca ou mercado"><select class="select" id="promoFilter" style="width:auto"><option value="all">Todas</option><option value="valid">Válidas agora</option><option value="expired">Vencidas</option><option value="inactive">Inativas</option></select></div><span class="badge info" id="promoCountBadge">0 promoções</span></div>
+        <div id="promotionsList" class="list"></div>
+      </section>
+
+      <section id="section-inbox" class="admin-section">
+        <div class="page-heading"><div><div class="eyebrow">Preparado para o bot</div><h1>Caixa de entrada</h1><p class="muted">Receba textos encaminhados por WhatsApp para revisão antes de transformar em promoção.</p></div><button class="btn btn-primary" data-open-modal="inboxModal">+ Registrar recebimento</button></div>
+        <div id="inboxList" class="list"></div>
+      </section>
+
+      <section id="section-audit" class="admin-section">
+        <div class="page-heading"><div><div class="eyebrow">Rastreabilidade</div><h1>Auditoria</h1><p class="muted">Registro das operações administrativas gravadas pelo painel.</p></div></div>
+        <div id="auditList" class="list"></div>
+      </section>
+    </section>
+  </main>
+
+  <nav class="admin-mobile-nav" aria-label="Administração mobile">
+    <button class="active" data-section="dashboard">▦<br>Início</button><button data-section="users">👥<br>Usuários</button><button data-section="markets">🏪<br>Mercados</button><button data-section="units">📍<br>Unidades</button><button data-section="promotions">🔥<br>Ofertas</button><button data-section="inbox">📥<br>Inbox</button><button data-section="audit">🛡️<br>Auditoria</button>
+  </nav>
+
+  <div id="userModal" class="modal" hidden><div class="modal-panel"><div class="modal-head"><div><strong>Novo usuário</strong><div class="small muted">Cria conta no Firebase Authentication sem desconectar o administrador.</div></div><button class="icon-btn" data-close-modal="userModal">✕</button></div><form id="userForm"><div class="modal-body"><div class="form-grid"><div class="field"><label>Nome</label><input class="input" name="name" required maxlength="80"></div><div class="field"><label>E-mail</label><input class="input" name="email" type="email" required></div><div class="field"><label>Senha inicial</label><input class="input" name="password" type="password" minlength="6" required></div><div class="field"><label>Perfil</label><select class="select" name="role" id="newUserRole"><option value="user">Usuário consumidor</option><option value="admin">Administrador</option></select></div></div><p class="field-help" style="margin-top:12px">A senha não é salva no Realtime Database. O Firebase Authentication armazena a credencial com segurança.</p></div><div class="modal-foot"><button class="btn btn-secondary" type="button" data-close-modal="userModal">Cancelar</button><button class="btn btn-primary" id="userSubmit" type="submit">Criar usuário</button></div></form></div></div>
+
+  <div id="marketModal" class="modal" hidden><div class="modal-panel"><div class="modal-head"><strong id="marketModalTitle">Cadastrar mercado</strong><button class="icon-btn" data-close-modal="marketModal">✕</button></div><form id="marketForm"><input type="hidden" name="id"><div class="modal-body"><div class="form-grid"><div class="field"><label>Nome comercial</label><input class="input" name="name" required maxlength="120"></div><div class="field"><label>Razão social (opcional)</label><input class="input" name="legalName" maxlength="150"></div><div class="field"><label>CNPJ (opcional)</label><input class="input" name="cnpj" maxlength="20"></div><div class="field"><label>WhatsApp/contato</label><input class="input" name="contact" maxlength="40"></div><div class="field full"><label>Site ou referência oficial (opcional)</label><input class="input" name="website" type="url" placeholder="https://..."></div><label class="checkline full"><input type="checkbox" name="active" checked><span>Mercado ativo na plataforma</span></label></div></div><div class="modal-foot"><button class="btn btn-secondary" type="button" data-close-modal="marketModal">Cancelar</button><button class="btn btn-primary" type="submit">Salvar mercado</button></div></form></div></div>
+
+  <div id="unitModal" class="modal" hidden><div class="modal-panel"><div class="modal-head"><strong id="unitModalTitle">Cadastrar unidade</strong><button class="icon-btn" data-close-modal="unitModal">✕</button></div><form id="unitForm"><input type="hidden" name="id"><div class="modal-body"><div class="form-grid"><div class="field"><label>Mercado</label><select class="select" name="marketId" id="unitMarketId" required></select></div><div class="field"><label>Nome da unidade</label><input class="input" name="name" required placeholder="Ex.: Loja Centro"></div><div class="field full"><label>Endereço completo</label><input class="input" name="address" required placeholder="Rua, número, bairro"></div><div class="field"><label>Cidade</label><input class="input" name="city" required></div><div class="field"><label>Estado</label><input class="input" name="state" required maxlength="2" placeholder="SP"></div><div class="field"><label>Latitude</label><input class="input" name="lat" type="number" step="any" required></div><div class="field"><label>Longitude</label><input class="input" name="lng" type="number" step="any" required></div><div class="full"><button class="btn btn-secondary btn-sm" type="button" id="useMyLocationUnit">📍 Usar minha localização atual</button></div><label class="checkline full"><input type="checkbox" name="active" checked><span>Unidade ativa para cálculo de proximidade</span></label></div></div><div class="modal-foot"><button class="btn btn-secondary" type="button" data-close-modal="unitModal">Cancelar</button><button class="btn btn-primary" type="submit">Salvar unidade</button></div></form></div></div>
+
+  <div id="promotionModal" class="modal" hidden><div class="modal-panel"><div class="modal-head"><div><strong id="promotionModalTitle">Cadastrar promoção real</strong><div class="small muted">Dados publicados ao consumidor após confirmação.</div></div><button class="icon-btn" data-close-modal="promotionModal">✕</button></div><form id="promotionForm"><input type="hidden" name="id"><div class="modal-body"><div class="form-grid"><div class="field"><label>Mercado</label><select class="select" name="marketId" id="promoMarketId" required></select></div><div class="field"><label>Unidade</label><select class="select" name="unitId" id="promoUnitId" required></select></div><div class="field full"><label>Produto exatamente como ofertado</label><input class="input" name="productName" required maxlength="160" placeholder="Ex.: Chocolate Lacta ao Leite 90g"></div><div class="field"><label>Categoria</label><input class="input" name="category" list="categoryList" required placeholder="Ex.: chocolate"></div><div class="field"><label>Marca</label><input class="input" name="brand" maxlength="80"></div><div class="field"><label>Embalagem/tamanho</label><input class="input" name="packageText" maxlength="80" placeholder="Ex.: 90g"></div><div class="field"><label>Preço promocional (R$)</label><input class="input" name="price" type="number" min="0.01" step="0.01" required></div><div class="field"><label>Preço anterior (R$)</label><input class="input" name="previousPrice" type="number" min="0" step="0.01"></div><div class="field"><label>Início</label><input class="input" name="startAt" type="datetime-local" required></div><div class="field"><label>Validade</label><input class="input" name="endAt" type="datetime-local" required></div><div class="field"><label>Origem</label><select class="select" name="sourceType" required><option value="whatsapp">WhatsApp do mercado</option><option value="encarte">Encarte/oferta oficial</option><option value="site">Site oficial</option><option value="manual">Informação conferida manualmente</option></select></div><div class="field"><label>Referência/origem</label><input class="input" name="sourceReference" required maxlength="250" placeholder="Ex.: WhatsApp recebido em 09/08/2026 14:00"></div><div class="field full"><label>Aliases para correspondência (opcional)</label><input class="input" name="aliases" maxlength="250" placeholder="chocolate, barra de chocolate"></div><label class="checkline full"><input type="checkbox" name="verified" required><span><strong>Confirmei o preço e a validade desta oferta.</strong> O registro representa um valor real informado/conferido, não um dado fictício.</span></label><label class="checkline full"><input type="checkbox" name="active" checked><span>Publicar como ativa</span></label></div><datalist id="categoryList"><option value="arroz"><option value="feijao"><option value="cafe"><option value="leite"><option value="chocolate"><option value="acucar"><option value="oleo"><option value="macarrao"><option value="carne"><option value="frango"><option value="refrigerante"><option value="detergente"><option value="papel_higienico"></datalist></div><div class="modal-foot"><button class="btn btn-secondary" type="button" data-close-modal="promotionModal">Cancelar</button><button class="btn btn-primary" type="submit">Salvar promoção</button></div></form></div></div>
+
+  <div id="inboxModal" class="modal" hidden><div class="modal-panel"><div class="modal-head"><strong>Registrar promoção recebida</strong><button class="icon-btn" data-close-modal="inboxModal">✕</button></div><form id="inboxForm"><div class="modal-body"><div class="form-grid"><div class="field"><label>Mercado (opcional)</label><select class="select" name="marketId" id="inboxMarketId"></select></div><div class="field"><label>Origem</label><select class="select" name="sourceType"><option value="whatsapp">WhatsApp</option><option value="encarte">Encarte</option><option value="outro">Outro</option></select></div><div class="field full"><label>Conteúdo original</label><textarea class="textarea" name="rawText" required placeholder="Cole aqui a mensagem recebida do mercado..."></textarea></div></div></div><div class="modal-foot"><button class="btn btn-secondary" type="button" data-close-modal="inboxModal">Cancelar</button><button class="btn btn-primary" type="submit">Registrar para revisão</button></div></form></div></div>
+
+  <footer class="footer"><div class="shell">Powered by <strong>thIAguinho Soluções Digitais</strong> · Mercador IA V1.0.0</div></footer>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
+  <script src="./js/firebase-config.js?v=1.0.0"></script>
+  <script src="./js/utils.js?v=1.0.0"></script>
+  <script src="./js/auth.js?v=1.0.0"></script>
+  <script src="./js/smart-matcher.js?v=1.0.0"></script>
+  <script src="./js/admin.js?v=1.0.0"></script>
+  <script src="./js/pwa.js?v=1.0.0"></script>
+</body>
+</html>

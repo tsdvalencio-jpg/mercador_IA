@@ -1,0 +1,149 @@
+{
+  "project": "Mercador IA",
+  "version": "1.0.0",
+  "build": "mercador-ia-v1-geopromocoes",
+  "generated": "2026-08-09",
+  "file_count": 28,
+  "files": [
+    {
+      "file": ".nojekyll",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "1.txt",
+      "sha256": "d590fa65c0bd9cc0392173372b494397b0491d29d15d6aa619d983bc6f5398a7",
+      "bytes": 6
+    },
+    {
+      "file": "INSTALACAO_FIREBASE_PASSO_A_PASSO.md",
+      "sha256": "0a04edbd34f54888a7e38214b92eaa3f711d7656e4c0ebb3531eac95ceec0b3e",
+      "bytes": 1119
+    },
+    {
+      "file": "README.md",
+      "sha256": "a6304b60b49e2b271d96fae7634b7011818948dcf6df35cbabc9a45c61718636",
+      "bytes": 5927
+    },
+    {
+      "file": "admin.html",
+      "sha256": "b315a28b6c5abfe207e8eefb4ba5dad3bd3db052cbe1408325d8e4d6e93319b5",
+      "bytes": 17518
+    },
+    {
+      "file": "assets/icon-192.png",
+      "sha256": "906d04334ae9adff2dc907e5bd624babad3350192281e7180b33b77236274355",
+      "bytes": 911
+    },
+    {
+      "file": "assets/icon-512.png",
+      "sha256": "aef65744d0d81ed754544471b5275c91c241c249fa4ebee64d0b83d18bef5a94",
+      "bytes": 2451
+    },
+    {
+      "file": "assets/icon.svg",
+      "sha256": "80a0302b3ba28f6be32a20098c78ad3892e35b5937b52b6289ad9bccc0c6ee19",
+      "bytes": 659
+    },
+    {
+      "file": "cadastro.html",
+      "sha256": "eb574dff0b256f4a18d00a721b90d734089c57b68472cdde2edfbd6d46dca10e",
+      "bytes": 3755
+    },
+    {
+      "file": "css/admin.css",
+      "sha256": "0a4e465aa438357211136d39b996ce331d31accbbcc6b385a02c12df1500199e",
+      "bytes": 1775
+    },
+    {
+      "file": "css/app.css",
+      "sha256": "fd1f4b407f99abef5c16daced393c1872565a42520c7e2feb8c5b2381c7b6548",
+      "bytes": 9437
+    },
+    {
+      "file": "css/auth.css",
+      "sha256": "cc5dd3588d9687403fc06a699f0561bbcb083307694136699b6d4797ca006db4",
+      "bytes": 2315
+    },
+    {
+      "file": "css/user.css",
+      "sha256": "5c7298e221769fd4c4cf9afb7f43fb3bd17cde0e2b74bc6171c896430303675f",
+      "bytes": 2766
+    },
+    {
+      "file": "firebase-database.rules.json",
+      "sha256": "1d85453290475576e956a30039a04933599984362e87c5cc8e998456eb314bfc",
+      "bytes": 9948
+    },
+    {
+      "file": "index.html",
+      "sha256": "35055676006be72527b0aa601bededa9cf334acc939d7ca0a7553b47d8b7fd0e",
+      "bytes": 3685
+    },
+    {
+      "file": "js/admin.js",
+      "sha256": "0d71c1002226fac1798f4f2ea514375079d82b8a5607f331aac5088eea025936",
+      "bytes": 27155
+    },
+    {
+      "file": "js/auth.js",
+      "sha256": "2b84162a6f184d69bb650b14538f3da5ea69ac80e679ccb1345cd076e1abf2ce",
+      "bytes": 2753
+    },
+    {
+      "file": "js/cadastro.js",
+      "sha256": "cadb9a302de73f5cf79bb7156e3f9d5e9ee6b21f46df422233c8ddf569e0ea7c",
+      "bytes": 1804
+    },
+    {
+      "file": "js/firebase-config.js",
+      "sha256": "2d454f0bd28b56312740fcaf32ec3707cfa46faffffd7df5f63df886b63b6843",
+      "bytes": 1039
+    },
+    {
+      "file": "js/index.js",
+      "sha256": "00ef0a500adc129003a9508f529ecfb28352fe82972d7c77ad7d8535256101a1",
+      "bytes": 1962
+    },
+    {
+      "file": "js/pwa.js",
+      "sha256": "9e988297fb854862798bce0d58ed483e4d47c348c06cb32966b0c37e6e34c50d",
+      "bytes": 312
+    },
+    {
+      "file": "js/smart-matcher.js",
+      "sha256": "f06f4da06f3e1327cb1d70ba5e874ef646300060eb8101844df9e725bc536a04",
+      "bytes": 6362
+    },
+    {
+      "file": "js/usuario.js",
+      "sha256": "a44994a85ac89c00c42658a4f419b3391a1280f838be065e6bfd8f99670d5a3c",
+      "bytes": 10941
+    },
+    {
+      "file": "js/utils.js",
+      "sha256": "6e2da465eb94da8156d16e95daab4b1aebd8d18456c0ffbde3a58b2cda0c4099",
+      "bytes": 5273
+    },
+    {
+      "file": "manifest.webmanifest",
+      "sha256": "ac73a51e97069716ede5a4466ec48a3ac88624a1486f00f791804553726707f4",
+      "bytes": 522
+    },
+    {
+      "file": "service-worker.js",
+      "sha256": "8fc2586d1ed90fb0686c0bc37d4964ad802088d31854e284a51d2ff0effafb44",
+      "bytes": 1686
+    },
+    {
+      "file": "usuario.html",
+      "sha256": "950bd665368827e4b9b47fd5ff5c601780a0c7e4a93ae6d5b7d82c176c74f8ad",
+      "bytes": 6051
+    },
+    {
+      "file": "version.json",
+      "sha256": "04dbbc58d34227df03bed62c751466fcbb8fd7893f4d9d1d6dcaeebda7c8d8e5",
+      "bytes": 116
+    }
+  ]
+}
