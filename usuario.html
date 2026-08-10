@@ -286,7 +286,7 @@
     <div class="app-container">
         <header class="header-section">
             <div class="top-bar">
-                <a href="#" id="back-button">❮ <span>Voltar</span></a>
+                <a href="./inicio.html" id="back-button">⌂ <span>Início</span></a>
                 <div class="purchase-title"><h1>Sua Compra</h1><span id="purchase-progress">Carregando lista...</span></div>
                 <div id="header-total">R$ 0,00</div>
             </div>
@@ -1148,7 +1148,6 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.printReportBtn.addEventListener('click', interactions.printReport);
     ui.finalizePurchaseBtn.addEventListener('click', interactions.finalizeAndReset);
     ui.toggleCalcBtn.addEventListener('click', interactions.toggleCalculator);
-    document.getElementById('back-button').addEventListener('click', async (e) => { e.preventDefault(); await window.MercadorIA.logout(); });
 });
 
 let newWorker;
