@@ -16,3 +16,32 @@
   .admin-mobile-nav button{flex:0 0 auto; min-width:72px; border:0; border-radius:11px; padding:9px 10px; background:transparent; color:var(--muted); font-size:.69rem; font-weight:850}
   .admin-mobile-nav button.active{background:rgba(64,223,135,.12);color:#dfffea}
 }
+
+/* Mercador IA V1.5 - importacao responsavel de encartes PDF */
+.pdf-import-safety { border-color:rgba(255,203,87,.25); background:linear-gradient(180deg, rgba(73,55,15,.42), rgba(24,31,20,.96)); }
+.pdf-import-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
+.pdf-import-progress { height:10px; margin-top:14px; overflow:hidden; border-radius:999px; border:1px solid var(--line); background:#07120d; }
+.pdf-import-progress > div { width:0%; height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--brand-dark),var(--brand)); transition:width .18s ease; }
+.pdf-candidate-card { position:relative; }
+.pdf-candidate-card.verified { border-color:rgba(64,223,135,.3); }
+.pdf-candidate-card.published { border-color:rgba(110,184,255,.35); background:rgba(110,184,255,.045); }
+.pdf-candidate-card.ignored { opacity:.55; }
+.pdf-candidate-main { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:start; }
+.pdf-price-stack { text-align:right; min-width:120px; }
+.pdf-price-main { display:block; color:var(--brand); font-size:1.4rem; font-weight:950; letter-spacing:-.04em; }
+.pdf-price-old { display:block; color:var(--muted); font-size:.78rem; text-decoration:line-through; margin-top:2px; }
+.pdf-confidence { display:flex; align-items:center; gap:8px; margin-top:10px; }
+.pdf-confidence-track { flex:0 1 160px; height:7px; overflow:hidden; border-radius:999px; background:rgba(255,255,255,.08); }
+.pdf-confidence-track span { display:block; height:100%; background:var(--brand); }
+.pdf-confidence.low .pdf-confidence-track span { background:var(--warning); }
+.pdf-review-panel { width:min(100%, 980px); }
+.pdf-preview-wrap { display:grid; place-items:center; min-height:170px; overflow:auto; padding:12px; border:1px solid var(--line); border-radius:16px; background:#050a07; }
+.pdf-preview-wrap canvas { display:block; max-width:100%; height:auto; border-radius:10px; background:white; }
+.pdf-review-actions { align-items:center; }
+.pdf-review-spacer { flex:1; }
+.pdf-detected-prices { margin-top:12px; padding:10px 12px; border:1px dashed var(--line); border-radius:12px; }
+.pdf-source-meta { margin-top:8px; line-height:1.45; }
+
+@media(max-width:640px){
+  .pdf-candidate-main{grid-template-columns:1fr}.pdf-price-stack{text-align:left}.pdf-review-actions{flex-wrap:wrap}.pdf-review-spacer{display:none}.pdf-review-actions .btn{flex:1 1 46%}.pdf-import-actions .btn{flex:1 1 100%}
+}
