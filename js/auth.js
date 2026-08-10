@@ -9,6 +9,18 @@
     return snap.exists() ? { uid, ...snap.val() } : null;
   };
 
+  const LOGIN_TOUCH_MS = 30 * 60 * 1000;
+  function shouldTouchLogin(uid, serverValue) {
+    const key = `mercadorIA:lastLoginTouch:${uid}`;
+    const now = Date.now();
+    let local = 0;
+    try { local = Number(localStorage.getItem(key) || 0); } catch (_) {}
+    const remote = Number(serverValue || 0);
+    const due = now - Math.max(local, remote) >= LOGIN_TOUCH_MS;
+    if (due) { try { localStorage.setItem(key, String(now)); } catch (_) {} }
+    return due;
+  }
+
   M.ensureAuthenticatedProfile = async function ensureAuthenticatedProfile(user) {
     if (!user) return null;
     const ref = db.ref(`users/${user.uid}`);
@@ -16,30 +28,22 @@
 
     if (user.uid === MASTER_UID) {
       const current = snap.val() || {};
-      const patch = {
-        name: current.name || 'Administrador Master',
-        email: user.email || current.email || '',
-        role: 'superadmin',
-        status: 'active',
-        updatedAt: serverTimestamp,
-        lastLoginAt: serverTimestamp
-      };
+      const patch = {};
+      if (!current.name) patch.name = 'Administrador Master';
+      if ((user.email || current.email || '') !== current.email) patch.email = user.email || current.email || '';
+      if (current.role !== 'superadmin') patch.role = 'superadmin';
+      if (current.status !== 'active') patch.status = 'active';
       if (!current.createdAt) patch.createdAt = serverTimestamp;
-      await ref.update(patch);
-      return { uid: user.uid, ...current, ...patch, role: 'superadmin', status: 'active' };
+      if (shouldTouchLogin(user.uid, current.lastLoginAt)) patch.lastLoginAt = serverTimestamp;
+      if (Object.keys(patch).length) { patch.updatedAt = serverTimestamp; await ref.update(patch); }
+      return { uid:user.uid, ...current, ...patch, role:'superadmin', status:'active' };
     }
 
-    if (!snap.exists()) {
-      throw new Error('Seu login existe no Authentication, mas o perfil da plataforma ainda não foi criado.');
-    }
-
+    if (!snap.exists()) throw new Error('Seu login existe no Authentication, mas o perfil da plataforma ainda não foi criado.');
     const profile = snap.val();
-    if (profile.status !== 'active') {
-      throw new Error('Seu acesso está bloqueado. Procure o administrador da plataforma.');
-    }
-
-    await ref.child('lastLoginAt').set(serverTimestamp).catch(() => {});
-    return { uid: user.uid, ...profile };
+    if (profile.status !== 'active') throw new Error('Seu acesso está bloqueado. Procure o administrador da plataforma.');
+    if (shouldTouchLogin(user.uid, profile.lastLoginAt)) ref.child('lastLoginAt').set(serverTimestamp).catch(() => {});
+    return { uid:user.uid, ...profile };
   };
 
   M.waitForAuth = function waitForAuth() {

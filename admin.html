@@ -7,8 +7,8 @@
   <title>Mercador IA — Administração</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./css/app.css?v=2.4.0">
-  <link rel="stylesheet" href="./css/admin.css?v=2.4.0">
+  <link rel="stylesheet" href="./css/app.css?v=2.6.0">
+  <link rel="stylesheet" href="./css/admin.css?v=2.6.0">
 </head>
 <body>
   <div id="loading" class="loading-screen"><div class="loading-box"><div class="spinner"></div><strong>Validando acesso administrativo...</strong></div></div>
@@ -76,7 +76,8 @@
 
       <section id="section-promotions" class="admin-section">
         <div class="page-heading"><div><div class="eyebrow">Ofertas verificadas</div><h1>Promoções</h1><p class="muted">Somente promoções ativas, conferidas e dentro da validade são exibidas aos usuários.</p></div><button class="btn btn-primary" data-open-modal="promotionModal">+ Nova promoção</button></div>
-        <div class="admin-toolbar"><div class="toolbar-left"><input class="input searchbox" id="promoSearch" placeholder="Buscar produto, marca ou mercado"><select class="select" id="promoFilter" style="width:auto"><option value="all">Todas</option><option value="valid">Válidas agora</option><option value="expired">Vencidas</option><option value="inactive">Inativas</option></select></div><span class="badge info" id="promoCountBadge">0 promoções</span></div>
+        <div class="admin-toolbar"><div class="toolbar-left"><input class="input searchbox" id="promoSearch" placeholder="Buscar produto, marca ou mercado"><select class="select" id="promoFilter" style="width:auto"><option value="all">Todas</option><option value="valid">Válidas agora</option><option value="expired">Vencidas</option><option value="inactive">Inativas</option></select></div><div class="toolbar-right"><button class="btn btn-secondary btn-sm" id="rebuildPromotionLiveBtn" type="button" title="Reconstrói o catálogo geográfico leve e o índice compacto de promoções">⚡ Otimizar dados dos usuários</button><span class="badge info" id="promoCountBadge">0 promoções</span></div></div>
+        <div class="card card-pad" style="margin-bottom:14px"><strong>Dados leves para o aplicativo</strong><p class="muted small" style="margin:6px 0 0">O usuário recebe um catálogo geográfico compacto e acompanha somente promoções das unidades próximas. Use “Otimizar dados dos usuários” uma vez após esta atualização para criar os índices dos cadastros já existentes; depois mercado, unidade e promoção passam a manter esses índices automaticamente.</p></div>
         <div id="promotionsList" class="list"></div>
       </section>
 
@@ -210,17 +211,32 @@
 
   <div id="inboxModal" class="modal" hidden><div class="modal-panel"><div class="modal-head"><strong>Registrar promoção recebida</strong><button type="button" class="icon-btn" data-close-modal="inboxModal">✕</button></div><form id="inboxForm"><div class="modal-body"><div class="form-grid"><div class="field"><label>Mercado (opcional)</label><select class="select" name="marketId" id="inboxMarketId"></select></div><div class="field"><label>Origem</label><select class="select" name="sourceType"><option value="whatsapp">WhatsApp</option><option value="encarte">Encarte</option><option value="outro">Outro</option></select></div><div class="field full"><label>Conteúdo original</label><textarea class="textarea" name="rawText" required placeholder="Cole aqui a mensagem recebida do mercado..."></textarea></div></div></div><div class="modal-foot"><button class="btn btn-secondary" type="button" data-close-modal="inboxModal">Cancelar</button><button class="btn btn-primary" type="submit">Registrar para revisão</button></div></form></div></div>
 
-  <footer class="footer"><div class="shell">Powered by <strong>thIAguinho Soluções Digitais</strong> · Mercador IA V2.4.0</div></footer>
+  <div id="deleteEntityModal" class="modal" hidden>
+    <div class="modal-panel delete-entity-panel">
+      <div class="modal-head"><div><strong id="deleteEntityTitle">Excluir definitivamente</strong><div class="small muted">Operação destrutiva disponível somente ao SuperAdmin.</div></div><button type="button" class="icon-btn" data-close-modal="deleteEntityModal">✕</button></div>
+      <form id="deleteEntityForm">
+        <div class="modal-body">
+          <div class="delete-warning"><strong>⚠ Exclusão definitiva</strong><p>Desativar é reversível. Excluir remove o registro do banco e não possui botão de restauração.</p></div>
+          <div class="delete-entity-name" id="deleteEntityName"></div>
+          <div id="deleteEntityImpact" class="delete-entity-impact"></div>
+          <div class="field" style="margin-top:16px"><label id="deleteEntityConfirmLabel" for="deleteEntityConfirmText">Digite o nome para confirmar</label><input class="input" id="deleteEntityConfirmText" autocomplete="off" spellcheck="false"></div>
+        </div>
+        <div class="modal-foot"><button class="btn btn-secondary" type="button" data-close-modal="deleteEntityModal">Cancelar</button><button class="btn btn-danger" id="deleteEntityConfirmBtn" type="submit" disabled>Excluir definitivamente</button></div>
+      </form>
+    </div>
+  </div>
+
+  <footer class="footer"><div class="shell">Powered by <strong>thIAguinho Soluções Digitais</strong> · Mercador IA V2.6.0</div></footer>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
-  <script src="./js/firebase-config.js?v=2.4.0"></script>
-  <script src="./js/utils.js?v=2.4.0"></script>
-  <script src="./js/auth.js?v=2.4.0"></script>
-  <script src="./js/smart-matcher.js?v=2.4.0"></script>
-  <script src="./js/pdf-encarte-importer.js?v=2.4.0"></script>
-  <script src="./js/admin.js?v=2.4.0"></script>
-  <script src="./js/pwa.js?v=2.4.0"></script>
+  <script src="./js/firebase-config.js?v=2.6.0"></script>
+  <script src="./js/utils.js?v=2.6.0"></script>
+  <script src="./js/auth.js?v=2.6.0"></script>
+  <script src="./js/smart-matcher.js?v=2.6.0"></script>
+  <script src="./js/pdf-encarte-importer.js?v=2.6.0"></script>
+  <script src="./js/admin.js?v=2.6.0"></script>
+  <script src="./js/pwa.js?v=2.6.0"></script>
 </body>
 </html>

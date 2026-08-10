@@ -8,8 +8,8 @@
   <title>Mercador IA — Entrar</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./css/app.css?v=1.2.0">
-  <link rel="stylesheet" href="./css/auth.css?v=1.2.0">
+  <link rel="stylesheet" href="./css/app.css?v=2.6.0">
+  <link rel="stylesheet" href="./css/auth.css?v=2.6.0">
 </head>
 <body>
   <main class="auth-layout">
@@ -39,12 +39,20 @@
           <form id="loginForm" class="auth-form" autocomplete="on">
             <div class="field">
               <label for="email">E-mail</label>
-              <input class="input" id="email" name="email" type="email" autocomplete="email" required placeholder="voce@email.com">
+              <input class="input" id="email" name="email" type="email" autocomplete="username" required placeholder="voce@email.com">
             </div>
             <div class="field">
               <label for="password">Senha</label>
-              <input class="input" id="password" name="password" type="password" autocomplete="current-password" minlength="6" required placeholder="Sua senha">
+              <div class="password-field-wrap">
+                <input class="input" id="password" name="password" type="password" autocomplete="current-password" minlength="6" required placeholder="Sua senha">
+                <button class="password-toggle" id="passwordToggle" type="button" aria-label="Mostrar senha" aria-pressed="false">Mostrar</button>
+              </div>
             </div>
+            <div class="auth-options" aria-label="Preferências de acesso">
+              <label class="checkline auth-check"><input type="checkbox" id="keepSignedIn" checked><span><strong>Salvar acesso neste aparelho</strong><small>Você não precisará digitar a senha novamente enquanto a sessão segura do Firebase continuar válida.</small></span></label>
+              <label class="checkline auth-check"><input type="checkbox" id="rememberEmail" checked><span><strong>Lembrar meu e-mail</strong><small>Somente o e-mail fica salvo localmente para facilitar um novo login.</small></span></label>
+            </div>
+            <div class="credential-safety">🔐 Sua senha <strong>não é gravada</strong> no navegador, no Realtime Database nem em texto no APK/PWA. O modo “Salvar acesso” usa a persistência segura da autenticação do Firebase.</div>
             <button class="btn btn-primary" id="loginBtn" type="submit">Entrar</button>
           </form>
           <div class="auth-links">
@@ -60,10 +68,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
-  <script src="./js/firebase-config.js?v=1.2.0"></script>
-  <script src="./js/utils.js?v=1.2.0"></script>
-  <script src="./js/auth.js?v=1.2.0"></script>
-  <script src="./js/index.js?v=1.2.0"></script>
-  <script src="./js/pwa.js?v=1.2.0"></script>
+  <script src="./js/firebase-config.js?v=2.6.0"></script>
+  <script src="./js/utils.js?v=2.6.0"></script>
+  <script src="./js/auth.js?v=2.6.0"></script>
+  <script src="./js/index.js?v=2.6.0"></script>
+  <script src="./js/pwa.js?v=2.6.0"></script>
 </body>
 </html>

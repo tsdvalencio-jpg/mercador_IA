@@ -13,10 +13,10 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
     
-    <script src="./js/firebase-config.js?v=2.4.0"></script>
-    <script src="./js/utils.js?v=2.4.0"></script>
-    <script src="./js/auth.js?v=2.4.0"></script>
-    <script src="./js/smart-matcher.js?v=2.4.0"></script>
+    <script src="./js/firebase-config.js?v=2.6.0"></script>
+    <script src="./js/utils.js?v=2.6.0"></script>
+    <script src="./js/auth.js?v=2.6.0"></script>
+    <script src="./js/smart-matcher.js?v=2.6.0"></script>
 
     <style>
         :root {
@@ -54,9 +54,13 @@
         .tab-btn{flex:1;padding:10px;background:#e9ecef;border:none;border-radius:8px;font-size:1rem;font-weight:500;cursor:pointer;transition:all 0.2s;color:var(--cor-texto-secundario)}
         .tab-btn.active{background-color:var(--cor-primaria);color:white}
         .tab-btn[data-tab="adiados"].action-mode{background-color:var(--cor-aviso);color:white;font-weight:bold}
-        .list-container{display:none}
+        .list-container{display:none;min-width:0}
         .list-container.active{display:block}
-        .item-list{list-style:none;padding:0}
+        .item-list{list-style:none;padding:0;contain:layout style paint;min-width:0}
+        .item-row,.report-item{content-visibility:auto;contain-intrinsic-size:92px 1px}
+        .light-loading{display:flex;align-items:center;justify-content:center;gap:9px;padding:24px;color:var(--cor-texto-secundario);font-size:.82rem}
+        .light-loading span:first-child{width:18px;height:18px;border:2px solid #d9e0e6;border-top-color:var(--cor-primaria);border-radius:50%;animation:spin-lite .75s linear infinite}
+        @keyframes spin-lite{to{transform:rotate(360deg)}}
         .item-row, .report-item{display:flex;align-items:center;padding:10px;background:var(--cor-container);border-radius:12px;margin-bottom:10px;box-shadow:var(--sombra-painel);transition:all 0.3s ease;cursor:pointer}
         .report-item:hover{transform:scale(1.02); box-shadow:0 0 0 2px var(--cor-primaria);}
         .item-row.status-comprado{opacity:0.7}
@@ -234,6 +238,7 @@
         .report-action-btn.edit{background:#eaf3ff;color:#0869c9}
         .report-action-btn.delete{background:#fff0ef;color:#bc3028}
         .report-edited{display:inline-flex;margin-top:5px;padding:3px 6px;border-radius:999px;background:#fff6e7;color:#8c5906;font-size:.66rem;font-weight:800;width:max-content}
+        .report-load-more{list-style:none;text-align:center;padding:12px 4px 18px}.report-load-more button{min-height:44px;border:1px solid #cedbe7;border-radius:10px;background:#f4f8fb;color:#245b7d;font-weight:800;padding:9px 14px;cursor:pointer}.report-load-more button:disabled{opacity:.6;cursor:wait}.report-load-more small{display:block;margin-top:5px;color:#7b8790;font-size:.68rem}
         .report-view-meta{display:grid;gap:6px;margin:-8px 0 12px;padding:10px;border-radius:10px;background:#eef3f7;font-size:.78rem;color:#53606b}
         .report-audit{border-top:1px solid #dce2e7;margin-top:12px;padding-top:10px}
         .report-audit h4{margin:0 0 8px;font-size:.86rem}
@@ -430,6 +435,15 @@ document.addEventListener('DOMContentLoaded', () => {
         currentTab: 'faltando',
         selectedReportId: null,
         editingReportId: null,
+        reportsLoaded: false,
+        reportsLoading: false,
+        reportsLoadingMore: false,
+        reportsHasMore: false,
+        reportsLoadedAt: 0,
+        listLoaded: false,
+        dirtyLists: new Set(['faltando','comprados','adiados']),
+        tabScroll: { faltando:0, comprados:0, adiados:0, relatorios:0 },
+        syncTimer: null,
         ui: { isCalculatorCollapsed: true },
     };
 
@@ -511,6 +525,60 @@ document.addEventListener('DOMContentLoaded', () => {
         return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     };
 
+    const listSyncSignature = (items) => (items || []).map((item) => [String(item.id),item.status,Number(item.quantidade||0),Number(item.preco||0),String(item.nome||''),String(item.emoji||'')].join('~')).sort().join('|');
+
+    const perfStore = {
+        key: (name) => `mercadorIA:${name}:${userId || 'anon'}`,
+        read: (name, fallback = null) => {
+            try { const raw = localStorage.getItem(perfStore.key(name)); return raw ? JSON.parse(raw) : fallback; } catch (_) { return fallback; }
+        },
+        write: (name, value) => {
+            try { localStorage.setItem(perfStore.key(name), JSON.stringify(value)); } catch (_) {}
+        },
+        loadCachedList: () => {
+            const cached = perfStore.read('list-cache', null);
+            if (!cached || !Array.isArray(cached.items)) return false;
+            state.itens = cached.items;
+            state.listLoaded = false;
+            state.dirtyLists = new Set(['faltando','comprados','adiados']);
+            return true;
+        },
+        saveList: () => perfStore.write('list-cache', { savedAt:Date.now(), items:state.itens }),
+        loadMemory: () => perfStore.read('shopping-memory', { products:{}, locations:[] }),
+        saveMemory: (memory) => perfStore.write('shopping-memory', memory),
+        rememberPurchase: (items, location) => {
+            const memory = perfStore.loadMemory();
+            memory.products = memory.products || {};
+            for (const item of items || []) {
+                const key = normalizeItemName(item.nome || item.name || ''); if (!key) continue;
+                const current = memory.products[key] || { name:item.nome || item.name, count:0, lastAt:0 };
+                current.name = item.nome || item.name || current.name;
+                current.count = Number(current.count || 0) + 1;
+                current.lastAt = Date.now();
+                memory.products[key] = current;
+            }
+            const cleanLocation = String(location || '').trim();
+            if (cleanLocation && cleanLocation !== 'Não informado') {
+                memory.locations = [cleanLocation, ...(memory.locations || []).filter((x) => x !== cleanLocation)].slice(0,20);
+            }
+            perfStore.saveMemory(memory);
+        },
+        seedMemoryFromReports: (reports) => {
+            const memory = perfStore.loadMemory();
+            const products = {};
+            const locations = [];
+            [...(reports || [])].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,50).forEach((report) => {
+                const loc = String(report.location || '').trim(); if (loc && loc !== 'Não informado' && !locations.includes(loc)) locations.push(loc);
+                reportItemsArray(report).forEach((item) => {
+                    const key = normalizeItemName(item.nome); if (!key) return;
+                    const current = products[key] || { name:item.nome, count:0, lastAt:0 };
+                    current.count += 1; current.lastAt = Math.max(current.lastAt, new Date(report.createdAt || 0).getTime() || 0); products[key] = current;
+                });
+            });
+            memory.products = products; memory.locations = locations.slice(0,20); perfStore.saveMemory(memory);
+        }
+    };
+
     const reportItemsArray = (report) => {
         if (!report || !report.items) return [];
         const raw = Array.isArray(report.items) ? report.items : Object.values(report.items || {});
@@ -564,22 +632,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const updatePurchaseLocationOptions = () => {
         if (!ui.purchaseLocationOptions) return;
-        const names = [...new Set(state.reports.map((r) => String(r.location || '').trim()).filter((x) => x && x !== 'Não informado'))].sort((a,b)=>a.localeCompare(b));
+        const memory = perfStore.loadMemory();
+        const fromReports = state.reportsLoaded ? state.reports.map((r) => String(r.location || '').trim()) : [];
+        const names = [...new Set([...(memory.locations || []), ...fromReports].filter((x) => x && x !== 'Não informado'))].slice(0,30);
         ui.purchaseLocationOptions.innerHTML = names.map((name) => `<option value="${window.MercadorIA?.escapeHtml ? window.MercadorIA.escapeHtml(name) : name.replace(/"/g,'&quot;')}"></option>`).join('');
     };
 
     const frequentProductSuggestions = (query = '') => {
         const current = new Set(state.itens.map((item) => normalizeItemName(item.nome)));
-        const freq = new Map();
-        [...state.reports].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,30).forEach((report, reportIndex) => {
-            reportItemsArray(report).forEach((item) => {
-                const key = normalizeItemName(item.nome); if (!key || current.has(key)) return;
-                const old = freq.get(key) || { name:item.nome, count:0, recent:0 };
-                old.count += 1; old.recent = Math.max(old.recent, 30 - reportIndex); freq.set(key, old);
-            });
-        });
+        const memory = perfStore.loadMemory();
         const q = normalizeItemName(query);
-        return [...freq.values()].filter((x) => !q || normalizeItemName(x.name).includes(q)).sort((a,b)=>(b.count-a.count)||(b.recent-a.recent)||a.name.localeCompare(b.name)).slice(0,8);
+        return Object.entries(memory.products || {}).
+            filter(([key]) => !current.has(key)).
+            map(([,value]) => ({ name:value.name, count:Number(value.count||0), recent:Number(value.lastAt||0) })).
+            filter((x) => x.name && (!q || normalizeItemName(x.name).includes(q))).
+            sort((a,b)=>(b.count-a.count)||(b.recent-a.recent)||a.name.localeCompare(b.name)).
+            slice(0,8);
     };
 
     const renderSmartSuggestions = () => {
@@ -615,8 +683,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const render = {
         all: () => {
             render.calculator();
-            render.lists();
-            render.reports();
+            render.currentList(true);
+            if (state.currentTab === 'relatorios') render.reports();
             render.total();
             render.activeItemHighlight();
             render.calculatorDisplay();
@@ -626,18 +694,31 @@ document.addEventListener('DOMContentLoaded', () => {
             updatePurchaseLocationOptions();
         },
         calculator: () => ui.calculatorFooter.classList.toggle('collapsed', state.ui.isCalculatorCollapsed),
-        lists: () => {
-            const lists = { faltando: document.getElementById('lista-faltando'), comprados: document.getElementById('lista-comprados'), adiados: document.getElementById('lista-adiados') };
-            Object.values(lists).forEach(list => list.innerHTML = '');
-            const groups = { faltando: [], comprado: [], adiado: [] };
-            state.itens.forEach(item => { if (groups[item.status]) groups[item.status].push(item) });
-            const createListContent = (listEl, items, message) => {
-                if (items.length === 0) listEl.innerHTML = `<p style="text-align:center; padding: 20px;">${message}</p>`;
-                else items.sort((a,b) => a.id - b.id).forEach(item => listEl.appendChild(render.createItemElement(item)));
-            };
-            createListContent(lists.faltando, groups.faltando, 'Nada para comprar!');
-            createListContent(lists.comprados, groups.comprado, 'Carrinho vazio.');
-            createListContent(lists.adiados, groups.adiado, 'Nenhum item adiado.');
+        currentList: (force = false) => {
+            if (state.currentTab === 'relatorios') { if (state.reportsLoaded || state.reportsLoading) render.reports(); return; }
+            render.list(state.currentTab, force);
+        },
+        list: (tabName, force = false) => {
+            const statusByTab = { faltando:'faltando', comprados:'comprado', adiados:'adiado' };
+            const status = statusByTab[tabName];
+            if (!status || (!force && !state.dirtyLists.has(tabName))) return;
+            const listEl = document.getElementById(`lista-${tabName}`);
+            if (!listEl) return;
+            const messages = { faltando:'Nada para comprar!', comprados:'Carrinho vazio.', adiados:'Nenhum item adiado.' };
+            const items = state.itens.filter((item) => item.status === status).sort((a,b) => {
+                const na = Number(a.id), nb = Number(b.id);
+                return Number.isFinite(na) && Number.isFinite(nb) ? na - nb : String(a.id).localeCompare(String(b.id));
+            });
+            const fragment = document.createDocumentFragment();
+            if (!items.length) {
+                const p = document.createElement('p'); p.style.cssText='text-align:center;padding:20px'; p.textContent = messages[tabName]; fragment.appendChild(p);
+            } else items.forEach((item) => fragment.appendChild(render.createItemElement(item)));
+            listEl.replaceChildren(fragment);
+            state.dirtyLists.delete(tabName);
+            requestAnimationFrame(() => {
+                render.activeItemHighlight();
+                window.dispatchEvent(new CustomEvent('mercador:list-rendered', { detail:{ tab:tabName } }));
+            });
         },
         createItemElement: (item) => {
             const li = document.createElement('li');
@@ -654,27 +735,45 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         reports: () => {
             const listEl = document.getElementById('lista-relatorios');
-            listEl.innerHTML = '';
-            if (state.reports.length === 0) {
-                listEl.innerHTML = `<p style="text-align:center; padding: 20px;">Nenhum relatório salvo.</p>`;
-                updatePurchaseLocationOptions();
+            if (!listEl) return;
+            if (state.reportsLoading && !state.reports.length) {
+                listEl.innerHTML = `<div class="light-loading"><span></span><span>Carregando relatórios recentes…</span></div>`;
                 return;
             }
-            state.reports.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).forEach(report => {
-                const li = document.createElement('li'); li.className='report-item'; li.dataset.id=report.id;
-                const reportDate = new Date(report.createdAt).toLocaleString('pt-BR');
-                const location = report.location && report.location !== 'Não informado' ? report.location : 'Local não informado';
-                const edits = Number(report.editCount || Object.keys(report.editHistory || {}).length || 0);
-                li.innerHTML = `<div class="report-details" style="cursor:pointer;"><div class="report-location">${window.MercadorIA?.escapeHtml ? window.MercadorIA.escapeHtml(location) : location}</div><div class="report-date" style="font-size:.82rem;font-weight:500">${reportDate}</div><div class="report-total">Total: R$ ${Number(report.total || 0).toFixed(2)}</div>${edits ? `<span class="report-edited">✎ editado ${edits}x</span>`:''}</div><div class="report-actions"><button type="button" class="report-action-btn edit" data-edit-report="${report.id}" title="Editar relatório">✎</button><button type="button" class="report-action-btn delete" data-delete-report="${report.id}" title="Excluir relatório">🗑</button></div>`;
-                listEl.appendChild(li);
-            });
+            const fragment = document.createDocumentFragment();
+            if (state.reports.length === 0) {
+                const p = document.createElement('p'); p.style.cssText='text-align:center;padding:20px'; p.textContent='Nenhum relatório salvo.'; fragment.appendChild(p);
+            } else {
+                [...state.reports].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).forEach(report => {
+                    const li = document.createElement('li'); li.className='report-item'; li.dataset.id=report.id;
+                    const reportDate = new Date(report.createdAt).toLocaleString('pt-BR');
+                    const location = report.location && report.location !== 'Não informado' ? report.location : 'Local não informado';
+                    const edits = Number(report.editCount || Object.keys(report.editHistory || {}).length || 0);
+                    li.innerHTML = `<div class="report-details" style="cursor:pointer;"><div class="report-location">${window.MercadorIA?.escapeHtml ? window.MercadorIA.escapeHtml(location) : location}</div><div class="report-date" style="font-size:.82rem;font-weight:500">${reportDate}</div><div class="report-total">Total: R$ ${Number(report.total || 0).toFixed(2)}</div>${edits ? `<span class="report-edited">✎ editado ${edits}x</span>`:''}</div><div class="report-actions"><button type="button" class="report-action-btn edit" data-edit-report="${report.id}" title="Editar relatório">✎</button><button type="button" class="report-action-btn delete" data-delete-report="${report.id}" title="Excluir relatório">🗑</button></div>`;
+                    fragment.appendChild(li);
+                });
+            }
+            if (state.reportsHasMore) {
+                const more = document.createElement('li'); more.className='report-load-more';
+                more.innerHTML = `<button type="button" data-load-more-reports ${state.reportsLoadingMore?'disabled':''}>${state.reportsLoadingMore?'Carregando…':'Carregar relatórios mais antigos'}</button><small>O histórico é carregado em blocos para economizar dados.</small>`;
+                fragment.appendChild(more);
+            }
+            listEl.replaceChildren(fragment);
             updatePurchaseLocationOptions();
         },
-        total: () => { const total = state.itens.filter(i => i.status === 'comprado').reduce((acc, item) => acc + (item.preco * item.quantidade), 0); ui.headerTotal.textContent = `R$ ${total.toFixed(2)}`; },
+        total: () => { const total = state.itens.filter(i => i.status === 'comprado').reduce((acc, item) => acc + (Number(item.preco||0) * Number(item.quantidade||0)), 0); ui.headerTotal.textContent = `R$ ${total.toFixed(2)}`; },
         activeItemHighlight: () => document.querySelectorAll('.item-row').forEach(row => row.classList.toggle('active', row.dataset.id == state.activeItemId)),
         calculatorDisplay: () => ui.calcDisplay.textContent = state.calcDisplay.replace('.', ','),
         activeItemDisplay: () => { const activeItem = state.itens.find(i => i.id == state.activeItemId); ui.activeItemDisplay.textContent = activeItem ? activeItem.nome : 'Nenhum item selecionado'; },
-        tabs: () => { const pending=state.itens.filter(i=>i.status==='faltando').length, bought=state.itens.filter(i=>i.status==='comprado').length, deferred=state.itens.filter(i=>i.status==='adiado').length; document.getElementById('tab-count-faltando').textContent=pending; document.getElementById('tab-count-comprados').textContent=bought; document.getElementById('tab-count-adiados').textContent=deferred; document.getElementById('tab-count-relatorios').textContent=state.reports.length; document.getElementById('smart-pending-count').textContent=pending; document.getElementById('smart-bought-count').textContent=bought; document.getElementById('smart-deferred-count').textContent=deferred; const adiadosTab=document.querySelector('[data-tab="adiados"]'); const label=adiadosTab.querySelector('span'); if(state.activeItemId && state.itens.find(i=>i.id==state.activeItemId)?.status==='faltando'){adiadosTab.classList.add('action-mode');label.textContent='Adiar';}else{adiadosTab.classList.remove('action-mode');label.textContent='Adiados';} }
+        tabs: () => {
+            const pending=state.itens.filter(i=>i.status==='faltando').length, bought=state.itens.filter(i=>i.status==='comprado').length, deferred=state.itens.filter(i=>i.status==='adiado').length;
+            document.getElementById('tab-count-faltando').textContent=pending; document.getElementById('tab-count-comprados').textContent=bought; document.getElementById('tab-count-adiados').textContent=deferred;
+            const reportMeta = perfStore.read('report-meta',{recentCount:0,limited:false});
+            document.getElementById('tab-count-relatorios').textContent=state.reportsLoaded ? `${state.reports.length}${state.reports.length>=50?'+':''}` : (reportMeta.recentCount ? `${reportMeta.recentCount}${reportMeta.limited?'+':''}` : '•');
+            document.getElementById('smart-pending-count').textContent=pending; document.getElementById('smart-bought-count').textContent=bought; document.getElementById('smart-deferred-count').textContent=deferred;
+            const adiadosTab=document.querySelector('[data-tab="adiados"]'); const label=adiadosTab.querySelector('span');
+            if(state.activeItemId && state.itens.find(i=>i.id==state.activeItemId)?.status==='faltando'){adiadosTab.classList.add('action-mode');label.textContent='Adiar';}else{adiadosTab.classList.remove('action-mode');label.textContent='Adiados';}
+        }
     };
 
     const calculator = {
@@ -704,26 +803,170 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+
+    const emitListState = () => {
+        window.MercadorIAListState = state.itens.map((item)=>({ ...item }));
+        window.dispatchEvent(new CustomEvent('mercador:list-updated', { detail:{ items:window.MercadorIAListState } }));
+    };
+
+    const markListsDirty = (...tabs) => {
+        (tabs.length ? tabs : ['faltando','comprados','adiados']).forEach((tab)=>state.dirtyLists.add(tab));
+    };
+
+    const renderAfterListMutation = (affectedTabs = []) => {
+        markListsDirty(...affectedTabs);
+        render.currentList();
+        render.total();
+        render.tabs();
+        render.activeItemDisplay();
+        render.activeItemHighlight();
+        renderSmartSuggestions();
+        perfStore.saveList();
+        emitListState();
+        preRenderHiddenListsInIdle();
+    };
+
+    const localUpdateItem = (id, updates) => {
+        const index = state.itens.findIndex((item)=>String(item.id)===String(id));
+        if (index < 0) return null;
+        const before = { ...state.itens[index] };
+        state.itens[index] = { ...state.itens[index], ...updates };
+        const tabFor = (status) => status === 'comprado' ? 'comprados' : status === 'adiado' ? 'adiados' : 'faltando';
+        renderAfterListMutation([tabFor(before.status), tabFor(state.itens[index].status)]);
+        return before;
+    };
+
+    const loadRecentReports = async ({ force = false, silent = false } = {}) => {
+        if (!reportsRef || state.reportsLoading) return;
+        if (!force && state.reportsLoaded && Date.now() - state.reportsLoadedAt < 120000) return;
+        state.reportsLoading = true;
+        if (state.currentTab === 'relatorios') render.reports();
+        try {
+            const snapshot = await reportsRef.orderByKey().limitToLast(51).once('value');
+            const data = snapshot.val();
+            const rows = data ? Object.keys(data).sort().map((key)=>({ ...data[key], id:key })) : [];
+            state.reportsHasMore = rows.length > 50;
+            state.reports = state.reportsHasMore ? rows.slice(-50) : rows;
+            state.reportsLoaded = true;
+            state.reportsLoadedAt = Date.now();
+            perfStore.write('report-meta', { recentCount:state.reports.length, limited:state.reportsHasMore, savedAt:Date.now() });
+            perfStore.seedMemoryFromReports(state.reports);
+            if (state.currentTab === 'relatorios') render.reports();
+            render.tabs();
+            renderSmartSuggestions();
+            updatePurchaseLocationOptions();
+        } catch (error) {
+            console.error('Falha ao carregar relatórios recentes:', error);
+            if (!silent) window.MercadorIA?.toast?.('Não foi possível carregar os relatórios agora.', 'error');
+        } finally {
+            state.reportsLoading = false;
+            if (state.currentTab === 'relatorios') render.reports();
+        }
+    };
+
+    const loadMoreReports = async () => {
+        if (!reportsRef || state.reportsLoadingMore || !state.reportsHasMore || !state.reports.length) return;
+        const oldest = [...state.reports].map((r)=>String(r.id)).sort()[0];
+        if (!oldest) return;
+        state.reportsLoadingMore = true; render.reports();
+        try {
+            const snap = await reportsRef.orderByKey().endAt(oldest).limitToLast(51).once('value');
+            const data=snap.val() || {};
+            const known=new Set(state.reports.map((r)=>String(r.id)));
+            const rows=Object.keys(data).sort().map((key)=>({ ...data[key], id:key }));
+            const older=rows.filter((r)=>!known.has(String(r.id)));
+            state.reports = [...state.reports, ...older];
+            state.reportsHasMore = rows.length === 51;
+            perfStore.write('report-meta',{recentCount:Math.min(state.reports.length,50),limited:state.reportsHasMore || state.reports.length>50,savedAt:Date.now()});
+        } catch(error) {
+            console.error('Falha ao carregar relatórios antigos:',error);
+            window.MercadorIA?.toast?.('Não foi possível carregar relatórios mais antigos agora.','error');
+        } finally { state.reportsLoadingMore=false; render.reports(); render.tabs(); }
+    };
+
+    const preRenderHiddenListsInIdle = () => {
+        const work = (deadline) => {
+            const tabs=['faltando','comprados','adiados'].filter((tab)=>tab!==state.currentTab && state.dirtyLists.has(tab));
+            for (const tab of tabs) {
+                if (deadline && typeof deadline.timeRemaining === 'function' && deadline.timeRemaining() < 5 && !deadline.didTimeout) break;
+                render.list(tab);
+            }
+        };
+        if ('requestIdleCallback' in window) requestIdleCallback(work, { timeout:1200 });
+        else setTimeout(()=>work(null),180);
+    };
+
     const interactions = {
         initDataListeners: () => {
             if (!listRef) return;
             store.loadUI();
             render.calculator();
-            listRef.on('value', (snapshot) => { const data = snapshot.val(); state.itens = data ? Object.keys(data).map(key => ({ ...data[key], id: key })) : []; render.all(); });
-            reportsRef.on('value', (snapshot) => { const data = snapshot.val(); state.reports = data ? Object.keys(data).map(key => ({ ...data[key], id: key })) : []; render.reports(); render.tabs(); renderSmartSuggestions(); });
-        },
-        addItemByName: async (rawName) => { const nome=String(rawName||'').trim(); if(!nome)return; const normalized=normalizeItemName(nome); const existing=state.itens.find((item)=>normalizeItemName(item.nome)===normalized); if(existing){ interactions.switchTab(existing.status==='comprado'?'comprados':existing.status==='adiado'?'adiados':'faltando'); setTimeout(()=>document.querySelector(`.item-row[data-id="${existing.id}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}),80); window.MercadorIA?.toast?.('Esse produto já está na sua lista.', 'warning'); return; } const newItemId=Date.now(); await listRef.child(newItemId).set({ id:newItemId, nome, emoji:getEmojiForItem(nome), status:'faltando', quantidade:1, preco:0, createdAt:Date.now() }); ui.input.value=''; renderSmartSuggestions(); ui.input.focus(); },
-        addItem: (e) => { e.preventDefault(); interactions.addItemByName(ui.input.value); },
-        deleteItem: (id) => { if (confirm('Tem certeza que deseja remover este item?')) { if (state.activeItemId === id) state.activeItemId = null; listRef.child(id).remove(); } },
-        deleteReport: (reportId) => {
-            if (confirm('Tem certeza que deseja excluir este relatório? Esta ação não pode ser desfeita.')) {
-                reportsRef.child(reportId).remove()
-                    .catch(err => alert('Erro ao excluir relatório.'));
+            const hadCache = perfStore.loadCachedList();
+            if (hadCache) {
+                render.all();
+                emitListState();
+                preRenderHiddenListsInIdle();
+            } else {
+                render.currentList(true); render.tabs(); render.total();
             }
+            listRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                const incoming = data ? Object.keys(data).map(key => ({ ...data[key], id: key })) : [];
+                const changed = listSyncSignature(incoming) !== listSyncSignature(state.itens);
+                state.itens = incoming;
+                state.listLoaded = true;
+                // Escritas otimistas já atualizaram a tela. Quando o Firebase apenas
+                // confirma exatamente o mesmo estado, não reconstruímos o DOM de novo.
+                if (!changed) return;
+                markListsDirty();
+                render.currentList(true);
+                render.total(); render.tabs(); render.activeItemDisplay(); render.activeItemHighlight(); renderSmartSuggestions();
+                perfStore.saveList(); emitListState();
+                preRenderHiddenListsInIdle();
+            });
+            updatePurchaseLocationOptions();
         },
-        updateItem: (id, updates) => listRef.child(id).update(updates),
+        addItemByName: async (rawName) => {
+            const nome=String(rawName||'').trim(); if(!nome)return;
+            const normalized=normalizeItemName(nome);
+            const existing=state.itens.find((item)=>normalizeItemName(item.nome)===normalized);
+            if(existing){
+                interactions.switchTab(existing.status==='comprado'?'comprados':existing.status==='adiado'?'adiados':'faltando');
+                setTimeout(()=>document.querySelector(`.item-row[data-id="${existing.id}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}),80);
+                window.MercadorIA?.toast?.('Esse produto já está na sua lista.', 'warning'); return;
+            }
+            const newItemId=String(Date.now());
+            const item={ id:newItemId, nome, emoji:getEmojiForItem(nome), status:'faltando', quantidade:1, preco:0, createdAt:Date.now() };
+            state.itens.push(item); renderAfterListMutation(['faltando']); ui.input.value=''; ui.input.focus();
+            try { await listRef.child(newItemId).set({ nome:item.nome, emoji:item.emoji, status:item.status, quantidade:1, preco:0, createdAt:item.createdAt }); }
+            catch(error){ state.itens=state.itens.filter((x)=>String(x.id)!==newItemId); renderAfterListMutation(['faltando']); window.MercadorIA?.toast?.('Não foi possível adicionar o item.','error'); }
+        },
+        addItem: (e) => { e.preventDefault(); interactions.addItemByName(ui.input.value); },
+        deleteItem: async (id) => {
+            if (!confirm('Tem certeza que deseja remover este item?')) return;
+            const index=state.itens.findIndex((x)=>String(x.id)===String(id)); if(index<0)return;
+            const removed=state.itens[index]; state.itens.splice(index,1); if (state.activeItemId === id) state.activeItemId = null;
+            renderAfterListMutation([removed.status==='comprado'?'comprados':removed.status==='adiado'?'adiados':'faltando']);
+            try { await listRef.child(id).remove(); } catch(error){ state.itens.splice(index,0,removed); renderAfterListMutation(); window.MercadorIA?.toast?.('Não foi possível excluir o item.','error'); }
+        },
+        deleteReport: async (reportId) => {
+            if (!confirm('Tem certeza que deseja excluir este relatório? Esta ação não pode ser desfeita.')) return;
+            const index=state.reports.findIndex((r)=>r.id===reportId); const removed=index>=0?state.reports[index]:null;
+            if(index>=0){state.reports.splice(index,1);render.reports();render.tabs();}
+            try { await reportsRef.child(reportId).remove(); }
+            catch(err){ if(removed){state.reports.splice(index,0,removed);render.reports();render.tabs();} window.MercadorIA?.toast?.('Erro ao excluir relatório.','error'); }
+        },
+        updateItem: async (id, updates) => {
+            const before = localUpdateItem(id, updates); if (!before) return;
+            try { await listRef.child(id).update(updates); }
+            catch(error){ localUpdateItem(id, before); window.MercadorIA?.toast?.('Não foi possível sincronizar a alteração.','error'); }
+        },
         handleItemClick: (id, status) => { if (status === 'faltando') interactions.selectItem(id); if (status === 'comprado') interactions.updateItem(id, { status: 'faltando', preco: 0, quantidade: 1 }); if (status === 'adiado') interactions.updateItem(id, { status: 'faltando' }); },
-        selectItem: (id) => { const selecting = state.activeItemId !== id; state.activeItemId = selecting ? id : null; state.calcDisplay = '0'; if (selecting) { state.ui.isCalculatorCollapsed = false; store.saveUI(); } render.all(); },
+        selectItem: (id) => {
+            const selecting = state.activeItemId !== id; state.activeItemId = selecting ? id : null; state.calcDisplay = '0';
+            if (selecting) { state.ui.isCalculatorCollapsed = false; store.saveUI(); render.calculator(); }
+            render.activeItemHighlight(); render.calculatorDisplay(); render.activeItemDisplay(); render.tabs();
+        },
         handleTabClick: (tabName) => {
             if (tabName === 'adiados' && state.activeItemId) {
                 const item = state.itens.find(i => i.id == state.activeItemId);
@@ -732,11 +975,14 @@ document.addEventListener('DOMContentLoaded', () => {
             interactions.switchTab(tabName);
         },
         switchTab: (tabName) => {
+            if (!tabName || tabName === state.currentTab) return;
+            const oldTab=state.currentTab; const oldContainer=document.getElementById(`lista-${oldTab}-container`);
+            if(oldContainer) state.tabScroll[oldTab]=oldContainer.scrollTop||window.scrollY||0;
             state.currentTab = tabName;
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.list-container').forEach(cont => cont.classList.remove('active'));
-            document.querySelector(`[data-tab='${tabName}']`).classList.add('active');
-            document.getElementById(`lista-${tabName}-container`).classList.add('active');
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab===tabName));
+            document.querySelectorAll('.list-container').forEach(cont => cont.classList.toggle('active', cont.id===`lista-${tabName}-container`));
+            if(tabName==='relatorios') loadRecentReports({ silent:false }); else render.list(tabName);
+            requestAnimationFrame(()=>{ const target=document.getElementById(`lista-${tabName}-container`); if(target && state.tabScroll[tabName]) target.scrollTop=state.tabScroll[tabName]; });
         },
         toggleCalculator: () => { state.ui.isCalculatorCollapsed = !state.ui.isCalculatorCollapsed; store.saveUI(); render.calculator(); },
         openReportModal: () => {
@@ -757,15 +1003,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const items = comprados.map((i)=>({ nome:i.nome, quantidade:Number(i.quantidade), preco:Number(i.preco), total:Number(i.quantidade)*Number(i.preco) }));
             const total = items.reduce((acc,i)=>acc+i.total,0);
             const reportData = { content:buildReportText({location,items,total,createdAt,note:''}), location, total, createdAt, purchaseAt:createdAt, items, note:'', editCount:0, createdBy:userId, formatVersion:2 };
+            const reportKey = reportsRef.push().key;
+            const nextItems = state.itens.filter(i => i.status === 'adiado' || i.status === 'faltando').map((item)=>({ ...item, status:'faltando', preco:0, quantidade:1 }));
+            const rootUpdates = {};
+            rootUpdates[`purchase_reports/${userId}/${reportKey}`] = reportData;
+            state.itens.forEach((item)=>{ rootUpdates[`shopping_lists/${userId}/${item.id}`] = null; });
+            nextItems.forEach((item)=>{ const data={...item}; delete data.id; rootUpdates[`shopping_lists/${userId}/${item.id}`]=data; });
             ui.finalizePurchaseBtn.disabled=true;
             try {
-                await reportsRef.push(reportData);
-                const aAdiar = state.itens.filter(i => i.status === 'adiado' || i.status === 'faltando');
-                const newItems = {};
-                aAdiar.forEach((item)=>{ const oldId=item.id; const data={...item,status:'faltando',preco:0,quantidade:1}; delete data.id; newItems[oldId]=data; });
-                await listRef.set(newItems);
-                ui.reportModal.classList.remove('visible'); interactions.switchTab('faltando');
-                window.MercadorIA?.toast?.('Compra finalizada e relatório salvo.', 'success');
+                await database.ref().update(rootUpdates);
+                perfStore.rememberPurchase(items, location);
+                state.itens = nextItems;
+                markListsDirty(); perfStore.saveList(); emitListState();
+                if (state.reportsLoaded) { state.reports.push({ ...reportData, id:reportKey }); state.reportsLoadedAt=Date.now(); }
+                const meta=perfStore.read('report-meta',{recentCount:0,limited:false}); perfStore.write('report-meta',{recentCount:Math.min(50,Number(meta.recentCount||0)+1),limited:Boolean(meta.limited||Number(meta.recentCount||0)>=49),savedAt:Date.now()});
+                render.currentList(true); render.total(); render.tabs(); renderSmartSuggestions(); updatePurchaseLocationOptions();
+                ui.reportModal.classList.remove('visible'); if(state.currentTab!=='faltando') interactions.switchTab('faltando');
+                window.MercadorIA?.toast?.('Compra finalizada e sincronizada em uma única operação.', 'success');
             } catch(error) { console.error('Erro ao finalizar a compra:',error); window.MercadorIA?.toast?.('Não foi possível finalizar a compra. Verifique sua conexão e tente novamente.','error',7000) || alert('Ocorreu um erro.'); }
             finally { ui.finalizePurchaseBtn.disabled=false; }
         },
@@ -796,8 +1050,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const beforeSnapshot={location:report.location||'Não informado',note:report.note||'',total:Number(report.total||0)};
             const afterSnapshot={location,note,total};
             if(oldItems.length){ beforeSnapshot.items=oldItems.map(i=>({nome:i.nome,quantidade:i.quantidade,preco:i.preco})); afterSnapshot.items=items.map(i=>({nome:i.nome,quantidade:i.quantidade,preco:i.preco})); }
-            const updates={location,note,total,content,lastEditedAt:editedAt,lastEditedBy:userId,editCount:Number(report.editCount||Object.keys(report.editHistory||{}).length||0)+1}; if(oldItems.length)updates.items=items.map(i=>({...i,total:i.quantidade*i.preco})); updates[`editHistory/${editKey}`]={editedAt,actorUid:userId,action:'report_updated',summary:changes.join(' · '),changesCount:changes.length,before:beforeSnapshot,after:afterSnapshot};
-            ui.saveReportEditBtn.disabled=true; try{await reportsRef.child(report.id).update(updates);ui.reportEditModal.classList.remove('visible');ui.reportViewModal.classList.remove('visible');window.MercadorIA?.toast?.('Relatório atualizado. A edição ficou registrada no histórico.','success');}catch(error){console.error('Erro ao editar relatório:',error);window.MercadorIA?.toast?.('Não foi possível salvar a edição do relatório.','error',7000);}finally{ui.saveReportEditBtn.disabled=false;}
+            const historyEntry={editedAt,actorUid:userId,action:'report_updated',summary:changes.join(' · '),changesCount:changes.length,before:beforeSnapshot,after:afterSnapshot};
+            const updates={location,note,total,content,lastEditedAt:editedAt,lastEditedBy:userId,editCount:Number(report.editCount||Object.keys(report.editHistory||{}).length||0)+1}; if(oldItems.length)updates.items=items.map(i=>({...i,total:i.quantidade*i.preco})); updates[`editHistory/${editKey}`]=historyEntry;
+            ui.saveReportEditBtn.disabled=true; try{await reportsRef.child(report.id).update(updates); Object.assign(report,{location,note,total,content,lastEditedAt:editedAt,lastEditedBy:userId,editCount:updates.editCount}); if(oldItems.length)report.items=updates.items; report.editHistory={...(report.editHistory||{}),[editKey]:historyEntry}; perfStore.seedMemoryFromReports(state.reports); render.reports(); ui.reportEditModal.classList.remove('visible');ui.reportViewModal.classList.remove('visible');window.MercadorIA?.toast?.('Relatório atualizado. A edição ficou registrada no histórico.','success');}catch(error){console.error('Erro ao editar relatório:',error);window.MercadorIA?.toast?.('Não foi possível salvar a edição do relatório.','error',7000);}finally{ui.saveReportEditBtn.disabled=false;}
         },
         downloadReport: () => {
             const updatedReportText = previewReportTextWithLocation();
@@ -829,7 +1084,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click',(e)=>{if(!e.target.closest('#form-adicionar-item,#smart-suggestions') && ui.smartSuggestions)ui.smartSuggestions.hidden=true;});
     ui.keypad.addEventListener('click', e => { if (e.target.tagName === 'BUTTON') calculator.handleInput(e.target.textContent, e.target.dataset.action); });
     ui.tabs.addEventListener('click', e => { if (e.target.tagName === 'BUTTON') interactions.handleTabClick(e.target.dataset.tab); });
-    document.getElementById('lista-relatorios').addEventListener('click', e => { const deleteBtn=e.target.closest('[data-delete-report]'); if(deleteBtn){interactions.deleteReport(deleteBtn.dataset.deleteReport);return;} const editBtn=e.target.closest('[data-edit-report]'); if(editBtn){interactions.openReportEdit(editBtn.dataset.editReport);return;} const reportRow=e.target.closest('.report-item'); if(reportRow)interactions.showReport(reportRow.dataset.id); });
+    document.getElementById('lista-relatorios').addEventListener('click', e => { const moreBtn=e.target.closest('[data-load-more-reports]'); if(moreBtn){loadMoreReports();return;} const deleteBtn=e.target.closest('[data-delete-report]'); if(deleteBtn){interactions.deleteReport(deleteBtn.dataset.deleteReport);return;} const editBtn=e.target.closest('[data-edit-report]'); if(editBtn){interactions.openReportEdit(editBtn.dataset.editReport);return;} const reportRow=e.target.closest('.report-item'); if(reportRow)interactions.showReport(reportRow.dataset.id); });
     ui.appContainer.addEventListener('click', e => { if(e.target.closest('.item-offer-action,.offer-sheet-overlay'))return; const row=e.target.closest('.item-row'); if(!row)return; const id=row.dataset.id; const item=state.itens.find(i=>i.id===id); if(!item)return; if(e.target.closest('[data-item-delete]')){interactions.deleteItem(id);return;} if(e.target.closest('[data-item-defer]')){interactions.updateItem(id,{status:'adiado'});if(state.activeItemId===id)state.activeItemId=null;return;} if(e.target.closest('[data-item-restore]')){interactions.updateItem(id,{status:'faltando',preco:0,quantidade:1});return;} if(e.target.closest('[data-item-select]')){interactions.selectItem(id);return;} if(item.status==='faltando' && e.target.closest('.item-details'))interactions.selectItem(id); });
     ui.btnFinalizar.addEventListener('click', interactions.openReportModal);
     ui.closeModalBtn.addEventListener('click', () => ui.reportModal.classList.remove('visible'));
@@ -897,6 +1152,6 @@ window.addEventListener('appinstalled', () => {
     deferredPrompt = null;
 });
 </script>
-    <script src="./js/lista-promocoes.js?v=2.4.0"></script>
+    <script src="./js/lista-promocoes.js?v=2.6.0"></script>
 </body>
 </html>

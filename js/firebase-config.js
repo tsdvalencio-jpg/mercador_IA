@@ -13,7 +13,7 @@
 
   const MASTER_UID = 'Ah16jHtjZTgSVBzgL759FnQl5W73';
   const MASTER_EMAIL = 'tsd.valencio@gmail.com';
-  const APP_VERSION = '1.2.0';
+  const APP_VERSION = '2.6.0';
 
   if (!window.firebase) {
     throw new Error('Firebase SDK não carregado.');

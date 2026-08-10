@@ -14,6 +14,84 @@
   const getMarket = (id) => state.markets[id] || null;
   const getUnit = (id) => state.units[id] || null;
 
+  const geoUnitRecord = (unit, marketOverride = null) => {
+    if (!unit || unit.active !== true || !unit.marketId) return null;
+    const market = marketOverride || getMarket(unit.marketId);
+    const lat = Number(unit.lat), lng = Number(unit.lng);
+    if (!market || market.active !== true || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return {
+      marketId: unit.marketId,
+      marketName: market.name || 'Mercado',
+      unitName: unit.name || 'Unidade',
+      address: unit.address || '',
+      city: unit.city || '',
+      state: unit.state || '',
+      mapsUrl: unit.mapsUrl || '',
+      lat, lng, active: true
+    };
+  };
+
+  function addGeoUnitUpdate(updates, unitId, nextUnit, previousUnit = null, marketOverride = null) {
+    const oldId = previousUnit?.id || unitId;
+    const live = geoUnitRecord(nextUnit, marketOverride);
+    if (live) updates[`geo_catalog/${unitId}`] = live;
+    else updates[`geo_catalog/${oldId}`] = null;
+  }
+
+  function addMarketGeoCatalogUpdates(updates, marketId, nextMarket) {
+    entries(state.units).filter((unit) => unit.marketId === marketId).forEach((unit) => {
+      addGeoUnitUpdate(updates, unit.id, unit, unit, nextMarket);
+    });
+  }
+
+  const livePromotionRecord = (promo) => {
+    if (!promo || promo.active !== true || promo.verified !== true || !promo.unitId || !promo.marketId) return null;
+    const endAt = Number(promo.endAt || 0); if (!endAt || endAt < Date.now() - 60000) return null;
+    return {
+      marketId: promo.marketId,
+      unitId: promo.unitId,
+      productName: promo.productName || '',
+      category: promo.category || 'outros',
+      brand: promo.brand || '',
+      packageText: promo.packageText || '',
+      price: Number(promo.price || 0),
+      previousPrice: Number(promo.previousPrice) > Number(promo.price) ? Number(promo.previousPrice) : null,
+      startAt: Number(promo.startAt || 0),
+      endAt,
+      priceKind: promo.priceKind || 'general',
+      requiresClub: promo.requiresClub === true,
+      clubName: promo.requiresClub ? (promo.clubName || '') : '',
+      conditions: promo.conditions || '',
+      aliases: promo.aliases || '',
+      verified: true,
+      active: true
+    };
+  };
+
+  function addPromotionLiveUpdates(updates, promoId, nextPromo, previousPromo = null) {
+    if (previousPromo?.unitId && previousPromo.unitId !== nextPromo?.unitId) updates[`promotion_live/${previousPromo.unitId}/${promoId}`] = null;
+    const live = livePromotionRecord(nextPromo);
+    if (live) updates[`promotion_live/${live.unitId}/${promoId}`] = live;
+    else if ((nextPromo?.unitId || previousPromo?.unitId)) updates[`promotion_live/${nextPromo?.unitId || previousPromo.unitId}/${promoId}`] = null;
+  }
+
+  async function rebuildPromotionLiveIndex() {
+    if (state.profile?.role !== 'superadmin') { M.toast('Somente o SuperAdmin pode reconstruir os índices leves.', 'warning'); return; }
+    const activePromos = entries(state.promotions).filter((promo) => livePromotionRecord(promo));
+    const geo = {};
+    entries(state.units).forEach((unit) => { const rec=geoUnitRecord(unit); if (rec) geo[unit.id]=rec; });
+    if (!window.confirm(`Otimizar os dados usados pelos usuários?\n\nSerão reconstruídos em uma única operação:\n• ${Object.keys(geo).length} unidades no catálogo geográfico leve\n• ${activePromos.length} promoções válidas no índice de ofertas\n\nIsso reduz as leituras do aplicativo sem alterar os cadastros originais.`)) return;
+    const btn = byId('rebuildPromotionLiveBtn'); M.setBusy(btn, true, 'Otimizando...');
+    try {
+      const feed = {};
+      activePromos.forEach((promo) => { const live=livePromotionRecord(promo); if (!feed[live.unitId]) feed[live.unitId]={}; feed[live.unitId][promo.id]=live; });
+      await db.ref().update({ geo_catalog:geo, promotion_live:feed });
+      await audit('user_indexes_rebuilt','system','user_indexes',{promotions:activePromos.length,units:Object.keys(geo).length});
+      M.toast(`Índices otimizados: ${Object.keys(geo).length} unidades e ${activePromos.length} promoções prontas para os usuários.`, 'success', 7500);
+    } catch(error) { console.error(error); M.toast(error.message || 'Falha ao otimizar os índices dos usuários.','error',8000); }
+    finally { M.setBusy(btn, false); }
+  }
+
   function navigate(section) {
     document.querySelectorAll('.admin-section').forEach((el) => el.classList.toggle('active', el.id === `section-${section}`));
     document.querySelectorAll('[data-section]').forEach((el) => el.classList.toggle('active', el.dataset.section === section));
@@ -78,7 +156,7 @@
     byId('marketCountBadge').textContent = `${markets.length} mercado${markets.length === 1 ? '' : 's'}`;
     byId('marketsList').innerHTML = markets.length ? markets.map((x) => {
       const unitCount = entries(state.units).filter((u) => u.marketId === x.id).length;
-      return `<article class="entity-card"><div class="entity-top"><div><div class="entity-title">${M.escapeHtml(x.name)}</div><div class="small muted">${M.escapeHtml(x.legalName || x.cnpj || 'Cadastro comercial')}</div><div class="entity-meta"><span class="badge ${x.active ? 'ok':'danger'}">${x.active ? 'ativo':'inativo'}</span><span class="badge info">${unitCount} unidade${unitCount === 1 ? '' : 's'}</span>${x.contact ? `<span class="badge">${M.escapeHtml(x.contact)}</span>`:''}</div></div><div class="entity-actions"><button type="button" class="btn btn-secondary btn-sm" data-market-edit="${x.id}">Editar</button><button type="button" class="btn btn-sm ${x.active ? 'btn-danger':'btn-secondary'}" data-market-toggle="${x.id}">${x.active ? 'Desativar':'Ativar'}</button></div></div></article>`;
+      return `<article class="entity-card"><div class="entity-top"><div><div class="entity-title">${M.escapeHtml(x.name)}</div><div class="small muted">${M.escapeHtml(x.legalName || x.cnpj || 'Cadastro comercial')}</div><div class="entity-meta"><span class="badge ${x.active ? 'ok':'danger'}">${x.active ? 'ativo':'inativo'}</span><span class="badge info">${unitCount} unidade${unitCount === 1 ? '' : 's'}</span>${x.contact ? `<span class="badge">${M.escapeHtml(x.contact)}</span>`:''}</div></div><div class="entity-actions"><button type="button" class="btn btn-secondary btn-sm" data-market-edit="${x.id}">Editar</button><button type="button" class="btn btn-sm ${x.active ? 'btn-danger':'btn-secondary'}" data-market-toggle="${x.id}">${x.active ? 'Desativar':'Ativar'}</button>${state.profile?.role === 'superadmin' ? `<button type="button" class="btn btn-danger btn-sm" data-market-delete="${x.id}">Excluir</button>` : ''}</div></div></article>`;
     }).join('') : '<div class="empty">Nenhum mercado cadastrado.</div>';
     refreshMarketSelects();
   }
@@ -87,7 +165,7 @@
     const q = M.normalizeText(byId('unitSearch').value);
     const units = entries(state.units).filter((x) => !q || M.normalizeText(`${x.name} ${x.address} ${x.city} ${x.state} ${getMarket(x.marketId)?.name || ''}`).includes(q)).sort((a,b) => String(a.name).localeCompare(String(b.name)));
     byId('unitCountBadge').textContent = `${units.length} unidade${units.length === 1 ? '' : 's'}`;
-    byId('unitsList').innerHTML = units.length ? units.map((x) => { const mapHref = x.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${x.lat},${x.lng}`)}`; const hasCoords = Number.isFinite(Number(x.lat)) && Number.isFinite(Number(x.lng)); return `<article class="entity-card"><div class="entity-top"><div><div class="entity-title">${M.escapeHtml(x.name)}</div><div class="small muted">${M.escapeHtml(getMarket(x.marketId)?.name || 'Mercado não encontrado')}${x.address ? ` · ${M.escapeHtml(x.address)}` : ''}${x.city ? ` · ${M.escapeHtml(x.city)}${x.state ? `/${M.escapeHtml(x.state)}` : ''}` : ''}</div><div class="entity-meta"><span class="badge ${x.active ? 'ok':'danger'}">${x.active ? 'ativa':'inativa'}</span><span class="badge ${hasCoords ? 'ok':'warn'}">${hasCoords ? '📍 GPS interno válido' : '⚠️ sem coordenadas'}</span>${x.mapsUrl ? '<span class="badge info">Google Maps vinculado</span>' : '<span class="badge">cadastro legado</span>'}</div></div><div class="entity-actions"><a class="btn btn-ghost btn-sm" target="_blank" rel="noopener" href="${M.escapeHtml(mapHref)}">Mapa</a><button type="button" class="btn btn-secondary btn-sm" data-unit-edit="${x.id}">Editar</button><button type="button" class="btn btn-sm ${x.active ? 'btn-danger':'btn-secondary'}" data-unit-toggle="${x.id}">${x.active ? 'Desativar':'Ativar'}</button></div></div></article>`; }).join('') : '<div class="empty">Nenhuma unidade cadastrada.</div>';
+    byId('unitsList').innerHTML = units.length ? units.map((x) => { const mapHref = x.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${x.lat},${x.lng}`)}`; const hasCoords = Number.isFinite(Number(x.lat)) && Number.isFinite(Number(x.lng)); return `<article class="entity-card"><div class="entity-top"><div><div class="entity-title">${M.escapeHtml(x.name)}</div><div class="small muted">${M.escapeHtml(getMarket(x.marketId)?.name || 'Mercado não encontrado')}${x.address ? ` · ${M.escapeHtml(x.address)}` : ''}${x.city ? ` · ${M.escapeHtml(x.city)}${x.state ? `/${M.escapeHtml(x.state)}` : ''}` : ''}</div><div class="entity-meta"><span class="badge ${x.active ? 'ok':'danger'}">${x.active ? 'ativa':'inativa'}</span><span class="badge ${hasCoords ? 'ok':'warn'}">${hasCoords ? '📍 GPS interno válido' : '⚠️ sem coordenadas'}</span>${x.mapsUrl ? '<span class="badge info">Google Maps vinculado</span>' : '<span class="badge">cadastro legado</span>'}</div></div><div class="entity-actions"><a class="btn btn-ghost btn-sm" target="_blank" rel="noopener" href="${M.escapeHtml(mapHref)}">Mapa</a><button type="button" class="btn btn-secondary btn-sm" data-unit-edit="${x.id}">Editar</button><button type="button" class="btn btn-sm ${x.active ? 'btn-danger':'btn-secondary'}" data-unit-toggle="${x.id}">${x.active ? 'Desativar':'Ativar'}</button>${state.profile?.role === 'superadmin' ? `<button type="button" class="btn btn-danger btn-sm" data-unit-delete="${x.id}">Excluir</button>` : ''}</div></div></article>`; }).join('') : '<div class="empty">Nenhuma unidade cadastrada.</div>';
     refreshUnitSelects();
     refreshPdfImportUnitSelects();
   }
@@ -106,7 +184,7 @@
       const unit = getUnit(p.unitId);
       const saving = Number(p.previousPrice) > Number(p.price) ? Number(p.previousPrice) - Number(p.price) : 0;
       const valid = activeNow(p);
-      return `<article class="entity-card"><div class="entity-top"><div><div class="entity-title">${M.escapeHtml(p.productName)}</div><div class="small muted">${M.escapeHtml(market?.name || 'Mercado')} · ${M.escapeHtml(unit?.name || 'Unidade')}</div><div class="entity-meta"><span class="badge ${valid ? 'ok':(p.active ? 'warn':'danger')}">${valid ? 'válida agora':(p.active ? 'fora da validade':'inativa')}</span><span class="badge ${p.verified ? 'ok':'warn'}">${p.verified ? 'valor conferido':'não conferida'}</span><span class="badge info">${M.formatCurrency(p.price)}</span>${p.requiresClub ? `<span class="badge warn">💳 ${M.escapeHtml(p.clubName || 'Preço Clube')}</span>`:''}${saving > 0 ? `<span class="badge ok">economia ${M.formatCurrency(saving)}</span>`:''}<span class="badge">até ${M.formatDateTime(p.endAt)}</span></div><div class="small muted" style="margin-top:9px">Origem: ${M.escapeHtml(p.sourceType || '—')} · ${M.escapeHtml(p.sourceReference || 'sem referência')}</div>${p.conditions ? `<div class="small muted" style="margin-top:6px">Condições: ${M.escapeHtml(p.conditions)}</div>`:''}</div><div class="entity-actions"><button type="button" class="btn btn-secondary btn-sm" data-promo-edit="${p.id}">Editar</button><button type="button" class="btn btn-sm ${p.active ? 'btn-danger':'btn-secondary'}" data-promo-toggle="${p.id}">${p.active ? 'Desativar':'Ativar'}</button></div></div></article>`;
+      return `<article class="entity-card"><div class="entity-top"><div><div class="entity-title">${M.escapeHtml(p.productName)}</div><div class="small muted">${M.escapeHtml(market?.name || 'Mercado')} · ${M.escapeHtml(unit?.name || 'Unidade')}</div><div class="entity-meta"><span class="badge ${valid ? 'ok':(p.active ? 'warn':'danger')}">${valid ? 'válida agora':(p.active ? 'fora da validade':'inativa')}</span><span class="badge ${p.verified ? 'ok':'warn'}">${p.verified ? 'valor conferido':'não conferida'}</span><span class="badge info">${M.formatCurrency(p.price)}</span>${p.requiresClub ? `<span class="badge warn">💳 ${M.escapeHtml(p.clubName || 'Preço Clube')}</span>`:''}${saving > 0 ? `<span class="badge ok">economia ${M.formatCurrency(saving)}</span>`:''}<span class="badge">até ${M.formatDateTime(p.endAt)}</span></div><div class="small muted" style="margin-top:9px">Origem: ${M.escapeHtml(p.sourceType || '—')} · ${M.escapeHtml(p.sourceReference || 'sem referência')}</div>${p.conditions ? `<div class="small muted" style="margin-top:6px">Condições: ${M.escapeHtml(p.conditions)}</div>`:''}</div><div class="entity-actions"><button type="button" class="btn btn-secondary btn-sm" data-promo-edit="${p.id}">Editar</button><button type="button" class="btn btn-sm ${p.active ? 'btn-danger':'btn-secondary'}" data-promo-toggle="${p.id}">${p.active ? 'Desativar':'Ativar'}</button>${state.profile?.role === 'superadmin' ? `<button type="button" class="btn btn-danger btn-sm" data-promo-delete="${p.id}">Excluir</button>` : ''}</div></div></article>`;
     }).join('') : '<div class="empty">Nenhuma promoção encontrada.</div>';
   }
 
@@ -211,10 +289,13 @@
   }
 
   async function saveMarket(event) {
-    event.preventDefault(); const f = event.currentTarget; const id = f.elements.id.value || db.ref('markets').push().key;
-    const value = { name:f.elements.name.value.trim(), legalName:f.elements.legalName.value.trim(), cnpj:f.elements.cnpj.value.trim(), contact:f.elements.contact.value.trim(), website:f.elements.website.value.trim(), active:f.elements.active.checked, updatedAt:serverTimestamp, updatedBy:state.user.uid };
-    if (!f.elements.id.value) { value.createdAt = serverTimestamp; value.createdBy = state.user.uid; }
-    await db.ref(`markets/${id}`).update(value); await audit(f.elements.id.value ? 'market_updated':'market_created','market',id,{name:value.name}); M.closeModal('marketModal'); M.toast('Mercado salvo.', 'success');
+    event.preventDefault(); const f=event.currentTarget; const id=f.elements.id.value || db.ref('markets').push().key;
+    const value={ name:f.elements.name.value.trim(), legalName:f.elements.legalName.value.trim(), cnpj:f.elements.cnpj.value.trim(), contact:f.elements.contact.value.trim(), active:f.elements.active.checked, updatedAt:serverTimestamp, updatedBy:state.user.uid };
+    const previous=state.markets[id] || null; const merged={...(previous||{}),...value};
+    if(!f.elements.id.value){merged.createdAt=serverTimestamp;merged.createdBy=state.user.uid;}
+    const updates={ [`markets/${id}`]:merged };
+    addMarketGeoCatalogUpdates(updates,id,merged);
+    await db.ref().update(updates); await audit(f.elements.id.value ? 'market_updated':'market_created','market',id,{name:value.name}); M.closeModal('marketModal'); M.toast('Mercado salvo.', 'success');
   }
 
   function decodeMapUrl(value) {
@@ -288,8 +369,12 @@
     if (!mapsUrl) { M.toast('Cole o link do Google Maps da unidade.', 'warning'); return; }
     if (!validCoords(lat, lng)) { applyUnitMapsLink(); return; }
     const value = { marketId:f.elements.marketId.value, name:f.elements.name.value.trim(), mapsUrl, address:f.elements.address.value.trim(), city:f.elements.city.value.trim(), state:(f.elements.state.value.trim() || 'SP').toUpperCase(), lat, lng, active:f.elements.active.checked, updatedAt:serverTimestamp, updatedBy:state.user.uid };
-    if (!f.elements.id.value) { value.createdAt=serverTimestamp; value.createdBy=state.user.uid; }
-    await db.ref(`market_units/${id}`).update(value); await audit(f.elements.id.value ? 'unit_updated':'unit_created','market_unit',id,{name:value.name,marketId:value.marketId,mapsUrl:value.mapsUrl}); M.closeModal('unitModal'); M.toast('Unidade salva com localização do Google Maps.', 'success');
+    const previous=state.units[id] || null; const merged={...(previous||{}),...value,id};
+    if (!f.elements.id.value) { merged.createdAt=serverTimestamp; merged.createdBy=state.user.uid; }
+    const stored={...merged}; delete stored.id;
+    const updates={ [`market_units/${id}`]:stored };
+    addGeoUnitUpdate(updates,id,merged,previous);
+    await db.ref().update(updates); await audit(f.elements.id.value ? 'unit_updated':'unit_created','market_unit',id,{name:value.name,marketId:value.marketId,mapsUrl:value.mapsUrl}); M.closeModal('unitModal'); M.toast('Unidade salva com localização do Google Maps.', 'success');
   }
 
   async function savePromotion(event) {
@@ -303,8 +388,11 @@
     if (requiresClub && !clubName) { M.toast('Informe o nome do Clube/programa exigido por esse preço.', 'warning'); return; }
     if (priceKind === 'condition' && !conditions) { M.toast('Descreva a condição necessária para esse preço.', 'warning'); return; }
     const value={ marketId:f.elements.marketId.value, unitId:f.elements.unitId.value, productName:f.elements.productName.value.trim(), category:M.slugify(f.elements.category.value).replaceAll('-','_') || M.inferCategory(f.elements.productName.value) || 'outros', brand:f.elements.brand.value.trim(), packageText:f.elements.packageText.value.trim(), price, previousPrice, startAt, endAt, sourceType:f.elements.sourceType.value, sourceReference:f.elements.sourceReference.value.trim(), aliases:f.elements.aliases.value.trim(), priceKind, requiresClub, clubName:requiresClub?clubName:'', conditions, verified:true, verifiedAt:serverTimestamp, verifiedBy:state.user.uid, active:f.elements.active.checked, updatedAt:serverTimestamp, updatedBy:state.user.uid };
-    if (!f.elements.id.value) { value.createdAt=serverTimestamp; value.createdBy=state.user.uid; }
-    await db.ref(`promotions/${id}`).update(value); await audit(f.elements.id.value ? 'promotion_updated':'promotion_created','promotion',id,{product:value.productName,price:value.price,marketId:value.marketId}); M.closeModal('promotionModal'); M.toast('Promoção real salva e conferida.', 'success');
+    const previous = state.promotions[id] || null;
+    const merged = { ...(previous || {}), ...value };
+    if (!f.elements.id.value) { merged.createdAt=serverTimestamp; merged.createdBy=state.user.uid; }
+    const updates={}; updates[`promotions/${id}`]=merged; addPromotionLiveUpdates(updates,id,merged,previous);
+    await db.ref().update(updates); await audit(f.elements.id.value ? 'promotion_updated':'promotion_created','promotion',id,{product:value.productName,price:value.price,marketId:value.marketId}); M.closeModal('promotionModal'); M.toast('Promoção real salva e índice leve sincronizado.', 'success');
   }
 
   async function saveInbox(event) {
@@ -316,7 +404,33 @@
   function populateUnitForm(id, trigger) { const x=state.units[id]; if(!x)return; resetUnitForm(); const f=byId('unitForm'); ['marketId','name','address','city','state','lat','lng'].forEach((k)=>{ if(f.elements[k])f.elements[k].value=x[k] ?? '';}); f.elements.mapsUrl.value=x.mapsUrl || mapsUrlFromCoords(x.lat,x.lng); f.elements.id.value=id; f.elements.active.checked=x.active===true; byId('unitModalTitle').textContent='Editar unidade'; applyUnitMapsLink({ quiet:true }); M.openModal('unitModal', { trigger }); }
   function populatePromotionForm(id, trigger) { const x=state.promotions[id]; if(!x)return; resetPromotionForm(); const f=byId('promotionForm'); ['marketId','productName','category','brand','packageText','price','previousPrice','sourceType','sourceReference','clubName','conditions','aliases'].forEach((k)=>{ if(f.elements[k])f.elements[k].value=x[k] ?? '';}); f.elements.priceKind.value=x.priceKind || (x.requiresClub ? 'club':'general'); refreshUnitSelects(); f.elements.unitId.value=x.unitId || ''; f.elements.startAt.value=M.toLocalDateTimeInput(x.startAt); f.elements.endAt.value=M.toLocalDateTimeInput(x.endAt); f.elements.id.value=id; f.elements.active.checked=x.active===true; f.elements.verified.checked=x.verified===true; byId('promotionModalTitle').textContent='Editar promoção'; M.openModal('promotionModal', { trigger }); }
 
-  async function toggle(path,id,field,current,action,type) { if(!id || id === 'undefined' || id === 'null'){ M.toast('Não foi possível identificar o registro. Atualize a página e tente novamente.', 'error'); return; } try { await db.ref(`${path}/${id}`).update({ [field]: !current, updatedAt: serverTimestamp, updatedBy: state.user.uid }); await audit(action,type,id,{[field]:!current}); M.toast('Status atualizado.', 'success'); } catch(error) { console.error('[Mercador IA] Falha ao alterar status', {path,id,field,error}); M.toast(error?.code === 'PERMISSION_DENIED' || /permission/i.test(error?.message || '') ? 'O Firebase recusou essa alteração. Verifique sua permissão de administrador.' : 'Não foi possível atualizar o status.', 'error', 7000); } }
+  async function toggle(path,id,field,current,action,type) {
+    if(!id || id === 'undefined' || id === 'null'){ M.toast('Não foi possível identificar o registro. Atualize a página e tente novamente.', 'error'); return; }
+    try {
+      if (path === 'promotions' && field === 'active') {
+        const previous = state.promotions[id]; if (!previous) throw new Error('Promoção não encontrada.');
+        const nextPromo = { ...previous, active:!current, updatedAt:serverTimestamp, updatedBy:state.user.uid };
+        const updates={ [`promotions/${id}/active`]:!current, [`promotions/${id}/updatedAt`]:serverTimestamp, [`promotions/${id}/updatedBy`]:state.user.uid };
+        addPromotionLiveUpdates(updates,id,nextPromo,previous);
+        await db.ref().update(updates);
+      } else if (path === 'market_units' && field === 'active') {
+        const previous=state.units[id]; if(!previous) throw new Error('Unidade não encontrada.');
+        const next={...previous,active:!current,updatedAt:serverTimestamp,updatedBy:state.user.uid,id};
+        const updates={ [`market_units/${id}/active`]:!current, [`market_units/${id}/updatedAt`]:serverTimestamp, [`market_units/${id}/updatedBy`]:state.user.uid };
+        addGeoUnitUpdate(updates,id,next,previous);
+        await db.ref().update(updates);
+      } else if (path === 'markets' && field === 'active') {
+        const previous=state.markets[id]; if(!previous) throw new Error('Mercado não encontrado.');
+        const next={...previous,active:!current,updatedAt:serverTimestamp,updatedBy:state.user.uid};
+        const updates={ [`markets/${id}/active`]:!current, [`markets/${id}/updatedAt`]:serverTimestamp, [`markets/${id}/updatedBy`]:state.user.uid };
+        addMarketGeoCatalogUpdates(updates,id,next);
+        await db.ref().update(updates);
+      } else {
+        await db.ref(`${path}/${id}`).update({ [field]: !current, updatedAt: serverTimestamp, updatedBy: state.user.uid });
+      }
+      await audit(action,type,id,{[field]:!current}); M.toast('Status atualizado.', 'success');
+    } catch(error) { console.error('[Mercador IA] Falha ao alterar status', {path,id,field,error}); M.toast(error?.code === 'PERMISSION_DENIED' || /permission/i.test(error?.message || '') ? 'O Firebase recusou essa alteração. Verifique sua permissão de administrador.' : 'Não foi possível atualizar o status.', 'error', 7000); }
+  }
 
 
   function getPdfImport() {
@@ -774,7 +888,7 @@
       }
       const key = db.ref('promotions').push().key;
       const sourceReference = `PDF ${imp.result.fileName} · pág. ${candidate.pageNumber} · SHA256 ${(imp.result.hash || '').slice(0,16)}${imp.sourceUrl ? ' · fonte oficial informada' : ''}`.slice(0,250);
-      updates[`promotions/${key}`] = {
+      const promoRecord = {
         marketId: imp.marketId,
         unitId: imp.unitId,
         productName: candidate.productName.slice(0,160),
@@ -814,6 +928,8 @@
         updatedAt: serverTimestamp,
         updatedBy: state.user.uid
       };
+      updates[`promotions/${key}`] = promoRecord;
+      addPromotionLiveUpdates(updates, key, promoRecord, null);
       created.push({ candidate, key });
     });
     if (created.length) await db.ref().update(updates);
@@ -916,8 +1032,123 @@
     }
   }
 
+  const deleteState = { type: '', id: '', name: '', plan: null, trigger: null };
+
+  function buildDeletePlan(type, id) {
+    if (type === 'market') {
+      const market = state.markets[id];
+      if (!market) return null;
+      const units = entries(state.units).filter((u) => u.marketId === id);
+      const unitIds = new Set(units.map((u) => u.id));
+      const promotions = entries(state.promotions).filter((p) => p.marketId === id || unitIds.has(p.unitId));
+      const inbox = entries(state.inbox).filter((m) => m.marketId === id);
+      return { type, id, name: market.name || id, units, promotions, inbox };
+    }
+    if (type === 'unit') {
+      const unit = state.units[id];
+      if (!unit) return null;
+      const promotions = entries(state.promotions).filter((p) => p.unitId === id);
+      return { type, id, name: `${getMarket(unit.marketId)?.name || 'Mercado'} · ${unit.name || id}`, unit, promotions };
+    }
+    if (type === 'promotion') {
+      const promotion = state.promotions[id];
+      if (!promotion) return null;
+      return { type, id, name: promotion.productName || id, promotion };
+    }
+    return null;
+  }
+
+  function deletePlanHtml(plan) {
+    if (plan.type === 'market') {
+      return `<div class="delete-impact"><div><strong>${plan.units.length}</strong><span>unidade${plan.units.length === 1 ? '' : 's'}</span></div><div><strong>${plan.promotions.length}</strong><span>promoç${plan.promotions.length === 1 ? 'ão' : 'ões'}</span></div><div><strong>${plan.inbox.length}</strong><span>registro${plan.inbox.length === 1 ? '' : 's'} de inbox</span></div></div><p>As <strong>unidades e promoções vinculadas serão excluídas definitivamente</strong>. Registros de Inbox serão preservados como histórico, mas perderão o vínculo ativo com o mercado.</p>`;
+    }
+    if (plan.type === 'unit') {
+      return `<div class="delete-impact"><div><strong>${plan.promotions.length}</strong><span>promoç${plan.promotions.length === 1 ? 'ão vinculada' : 'ões vinculadas'}</span></div></div><p>A unidade e todas as promoções vinculadas a ela serão excluídas definitivamente.</p>`;
+    }
+    return '<p>Esta promoção será excluída definitivamente. Se você só não quiser exibi-la agora, prefira <strong>Desativar</strong>.</p>';
+  }
+
+  function updateDeleteConfirmState() {
+    const input = byId('deleteEntityConfirmText');
+    const btn = byId('deleteEntityConfirmBtn');
+    if (!input || !btn) return;
+    btn.disabled = M.normalizeText(input.value) !== M.normalizeText(deleteState.name);
+  }
+
+  function openDeleteEntityModal(type, id, trigger) {
+    if (state.profile?.role !== 'superadmin') {
+      M.toast('Somente o SuperAdmin pode excluir dados definitivamente. Use Desativar para arquivar.', 'warning', 6500);
+      return;
+    }
+    const plan = buildDeletePlan(type, id);
+    if (!plan) { M.toast('Registro não encontrado para exclusão.', 'error'); return; }
+    Object.assign(deleteState, { type, id, name: plan.name, plan, trigger });
+    byId('deleteEntityName').textContent = plan.name;
+    byId('deleteEntityImpact').innerHTML = deletePlanHtml(plan);
+    const label = type === 'market' ? 'mercado' : (type === 'unit' ? 'unidade' : 'promoção');
+    byId('deleteEntityTitle').textContent = `Excluir ${label} definitivamente`;
+    byId('deleteEntityConfirmLabel').textContent = `Digite exatamente “${plan.name}” para confirmar:`;
+    byId('deleteEntityConfirmText').value = '';
+    byId('deleteEntityConfirmBtn').disabled = true;
+    M.openModal('deleteEntityModal', { trigger });
+    setTimeout(() => byId('deleteEntityConfirmText')?.focus({ preventScroll: true }), 120);
+  }
+
+  async function deleteEntityPermanently(event) {
+    event.preventDefault();
+    if (state.profile?.role !== 'superadmin') throw new Error('Somente o SuperAdmin pode excluir definitivamente.');
+    const input = byId('deleteEntityConfirmText');
+    if (M.normalizeText(input.value) !== M.normalizeText(deleteState.name)) {
+      M.toast('Digite o nome exatamente como exibido para confirmar.', 'warning');
+      return;
+    }
+    const plan = buildDeletePlan(deleteState.type, deleteState.id);
+    if (!plan) { M.closeModal('deleteEntityModal'); M.toast('O registro já não existe.', 'info'); return; }
+    const btn = byId('deleteEntityConfirmBtn');
+    M.setBusy(btn, true, 'Excluindo...');
+    try {
+      const updates = {};
+      const details = { name: plan.name };
+      if (plan.type === 'market') {
+        updates[`markets/${plan.id}`] = null;
+        plan.units.forEach((u) => { updates[`market_units/${u.id}`] = null; updates[`geo_catalog/${u.id}`] = null; });
+        plan.promotions.forEach((p) => { updates[`promotions/${p.id}`] = null; if (p.unitId) updates[`promotion_live/${p.unitId}/${p.id}`] = null; });
+        plan.inbox.forEach((m) => {
+          updates[`promotion_inbox/${m.id}/marketId`] = null;
+          updates[`promotion_inbox/${m.id}/marketNameSnapshot`] = plan.name;
+          updates[`promotion_inbox/${m.id}/marketDeletedAt`] = serverTimestamp;
+        });
+        details.unitsDeleted = plan.units.length;
+        details.promotionsDeleted = plan.promotions.length;
+        details.inboxPreserved = plan.inbox.length;
+      } else if (plan.type === 'unit') {
+        updates[`market_units/${plan.id}`] = null; updates[`geo_catalog/${plan.id}`] = null;
+        plan.promotions.forEach((p) => { updates[`promotions/${p.id}`] = null; if (p.unitId) updates[`promotion_live/${p.unitId}/${p.id}`] = null; });
+        details.promotionsDeleted = plan.promotions.length;
+        details.marketId = plan.unit.marketId;
+      } else if (plan.type === 'promotion') {
+        updates[`promotions/${plan.id}`] = null; if (plan.promotion.unitId) updates[`promotion_live/${plan.promotion.unitId}/${plan.id}`] = null;
+        details.marketId = plan.promotion.marketId;
+        details.unitId = plan.promotion.unitId;
+        details.price = plan.promotion.price;
+      }
+      await db.ref().update(updates);
+      const action = plan.type === 'market' ? 'market_deleted_permanently' : (plan.type === 'unit' ? 'unit_deleted_permanently' : 'promotion_deleted_permanently');
+      await audit(action, plan.type === 'unit' ? 'market_unit' : plan.type, plan.id, details);
+      M.closeModal('deleteEntityModal');
+      M.toast(`${plan.type === 'market' ? 'Mercado' : (plan.type === 'unit' ? 'Unidade' : 'Promoção')} excluído definitivamente.`, 'success', 7000);
+    } catch (error) {
+      console.error('[Mercador IA] Falha na exclusão definitiva:', error);
+      M.toast(error.message || 'Não foi possível excluir o registro.', 'error', 8000);
+    } finally {
+      M.setBusy(btn, false);
+    }
+  }
+
   function bindActions() {
     byId('logoutBtn').addEventListener('click', M.logout);
+    byId('deleteEntityForm')?.addEventListener('submit', deleteEntityPermanently);
+    byId('deleteEntityConfirmText')?.addEventListener('input', updateDeleteConfirmState);
     byId('userForm').addEventListener('submit', createUser);
     byId('marketForm').addEventListener('submit', (e)=>saveMarket(e).catch((er)=>M.toast(er.message,'error')));
     byId('unitForm').addEventListener('submit', (e)=>saveUnit(e).catch((er)=>M.toast(er.message,'error')));
@@ -938,6 +1169,7 @@
     byId('promoMarketId').addEventListener('change', refreshUnitSelects);
     ['userSearch','marketSearch','unitSearch','promoSearch'].forEach((id)=>byId(id).addEventListener('input', ()=>({userSearch:renderUsers,marketSearch:renderMarkets,unitSearch:renderUnits,promoSearch:renderPromotions}[id])()));
     byId('promoFilter').addEventListener('change', renderPromotions);
+    byId('rebuildPromotionLiveBtn')?.addEventListener('click', rebuildPromotionLiveIndex);
     byId('parseUnitMapsLink')?.addEventListener('click', () => applyUnitMapsLink());
     byId('unitMapsUrl')?.addEventListener('paste', () => setTimeout(() => applyUnitMapsLink({ quiet:true }), 30));
     byId('unitMapsUrl')?.addEventListener('change', () => applyUnitMapsLink({ quiet:true }));
@@ -954,6 +1186,9 @@
       if(t.dataset.marketEdit) { event.preventDefault(); event.stopPropagation(); populateMarketForm(t.dataset.marketEdit, t); return; }
       if(t.dataset.unitEdit) { event.preventDefault(); event.stopPropagation(); populateUnitForm(t.dataset.unitEdit, t); return; }
       if(t.dataset.promoEdit) { event.preventDefault(); event.stopPropagation(); populatePromotionForm(t.dataset.promoEdit, t); return; }
+      if(t.dataset.marketDelete) { event.preventDefault(); event.stopPropagation(); openDeleteEntityModal('market', t.dataset.marketDelete, t); return; }
+      if(t.dataset.unitDelete) { event.preventDefault(); event.stopPropagation(); openDeleteEntityModal('unit', t.dataset.unitDelete, t); return; }
+      if(t.dataset.promoDelete) { event.preventDefault(); event.stopPropagation(); openDeleteEntityModal('promotion', t.dataset.promoDelete, t); return; }
       if(t.dataset.marketToggle){ event.preventDefault(); const id=t.dataset.marketToggle; const x=state.markets[id]; if(x) await toggle('markets',id,'active',x.active,'market_status_changed','market'); return; }
       if(t.dataset.unitToggle){ event.preventDefault(); const id=t.dataset.unitToggle; const x=state.units[id]; if(x) await toggle('market_units',id,'active',x.active,'unit_status_changed','market_unit'); return; }
       if(t.dataset.promoToggle){ event.preventDefault(); const id=t.dataset.promoToggle; const x=state.promotions[id]; if(x) await toggle('promotions',id,'active',x.active,'promotion_status_changed','promotion'); return; }
