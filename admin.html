@@ -7,8 +7,8 @@
   <title>Mercador IA — Administração</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./css/app.css?v=2.2.0">
-  <link rel="stylesheet" href="./css/admin.css?v=2.2.0">
+  <link rel="stylesheet" href="./css/app.css?v=2.3.0">
+  <link rel="stylesheet" href="./css/admin.css?v=2.3.0">
 </head>
 <body>
   <div id="loading" class="loading-screen"><div class="loading-box"><div class="spinner"></div><strong>Validando acesso administrativo...</strong></div></div>
@@ -35,7 +35,7 @@
         <button data-section="inbox">📥 Caixa de entrada</button>
         <button data-section="audit">🛡️ Auditoria</button>
       </nav>
-      <div class="security-note" style="margin-top:18px">Valores promocionais só são publicados quando marcados como conferidos. O sistema não inclui preços fictícios automaticamente.</div>
+      <div class="security-note" style="margin-top:18px">Valores promocionais entram no sistema somente por dois caminhos controlados: aprovação automática do motor ou conferência manual do administrador. Itens pendentes de revisão podem ser excluídos da importação sem publicação.</div>
     </aside>
 
     <section class="admin-content">
@@ -136,8 +136,12 @@
                 <option value="low">Baixa confiança</option>
               </select>
             </div>
-            <button class="btn btn-secondary" id="pdfPublishAutoBtn" type="button">Publicar automáticos seguros</button>
-            <button class="btn btn-primary" id="pdfPublishVerifiedBtn" type="button">Publicar revisados</button>
+            <div class="pdf-workflow-actions">
+              <button class="btn btn-primary" id="pdfPublishReadyBtn" type="button">Publicar tudo que está pronto</button>
+              <button class="btn btn-secondary" id="pdfPublishAutoBtn" type="button">Publicar automáticos seguros</button>
+              <button class="btn btn-secondary" id="pdfPublishVerifiedBtn" type="button">Publicar revisados</button>
+              <button class="btn btn-danger" id="pdfDiscardPendingBtn" type="button">Excluir pendentes de revisão</button>
+            </div>
           </div>
           <div id="pdfImportMeta" class="small muted" style="margin-bottom:12px"></div>
           <div id="pdfCandidatesList" class="list"></div>
@@ -195,7 +199,7 @@
           <div class="pdf-detected-prices small muted" id="pdfDetectedPrices"></div>
         </div>
         <div class="modal-foot pdf-review-actions">
-          <button class="btn btn-danger" id="pdfIgnoreCandidateBtn" type="button">Ignorar candidato</button>
+          <button class="btn btn-danger" id="pdfIgnoreCandidateBtn" type="button">Excluir da importação</button>
           <span class="pdf-review-spacer"></span>
           <button class="btn btn-secondary" type="button" data-close-modal="pdfReviewModal">Cancelar</button>
           <button class="btn btn-primary" type="submit">Salvar conferência</button>
@@ -206,17 +210,17 @@
 
   <div id="inboxModal" class="modal" hidden><div class="modal-panel"><div class="modal-head"><strong>Registrar promoção recebida</strong><button type="button" class="icon-btn" data-close-modal="inboxModal">✕</button></div><form id="inboxForm"><div class="modal-body"><div class="form-grid"><div class="field"><label>Mercado (opcional)</label><select class="select" name="marketId" id="inboxMarketId"></select></div><div class="field"><label>Origem</label><select class="select" name="sourceType"><option value="whatsapp">WhatsApp</option><option value="encarte">Encarte</option><option value="outro">Outro</option></select></div><div class="field full"><label>Conteúdo original</label><textarea class="textarea" name="rawText" required placeholder="Cole aqui a mensagem recebida do mercado..."></textarea></div></div></div><div class="modal-foot"><button class="btn btn-secondary" type="button" data-close-modal="inboxModal">Cancelar</button><button class="btn btn-primary" type="submit">Registrar para revisão</button></div></form></div></div>
 
-  <footer class="footer"><div class="shell">Powered by <strong>thIAguinho Soluções Digitais</strong> · Mercador IA V2.2.0</div></footer>
+  <footer class="footer"><div class="shell">Powered by <strong>thIAguinho Soluções Digitais</strong> · Mercador IA V2.3.0</div></footer>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
-  <script src="./js/firebase-config.js?v=2.2.0"></script>
-  <script src="./js/utils.js?v=2.2.0"></script>
-  <script src="./js/auth.js?v=2.2.0"></script>
-  <script src="./js/smart-matcher.js?v=2.2.0"></script>
-  <script src="./js/pdf-encarte-importer.js?v=2.2.0"></script>
-  <script src="./js/admin.js?v=2.2.0"></script>
-  <script src="./js/pwa.js?v=2.2.0"></script>
+  <script src="./js/firebase-config.js?v=2.3.0"></script>
+  <script src="./js/utils.js?v=2.3.0"></script>
+  <script src="./js/auth.js?v=2.3.0"></script>
+  <script src="./js/smart-matcher.js?v=2.3.0"></script>
+  <script src="./js/pdf-encarte-importer.js?v=2.3.0"></script>
+  <script src="./js/admin.js?v=2.3.0"></script>
+  <script src="./js/pwa.js?v=2.3.0"></script>
 </body>
 </html>

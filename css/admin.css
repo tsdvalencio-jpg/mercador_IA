@@ -61,3 +61,14 @@
 @media(max-width:640px){
   #pdfPublishAutoBtn,#pdfPublishVerifiedBtn{flex:1 1 100%;}
 }
+
+/* Mercador IA V2.3 - controle profissional da fila de revisão */
+.pdf-workflow-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; align-items:center; }
+.pdf-candidate-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.pdf-candidate-card.ignored { opacity:.68; border-style:dashed; }
+#pdfPublishReadyBtn { box-shadow:0 8px 24px rgba(64,223,135,.12); }
+@media(max-width:760px){
+  .pdf-workflow-actions { width:100%; display:grid; grid-template-columns:1fr; }
+  .pdf-workflow-actions .btn { width:100%; }
+  .pdf-candidate-actions .btn { flex:1 1 100%; }
+}

@@ -360,6 +360,7 @@
     const manualReady = candidates.filter((x) => x.verified && x.verificationMode === 'manual' && !x.published && !x.ignored).length;
     const reviewPending = candidates.filter((x) => !x.published && !x.ignored && x.automationDecision !== 'auto' && !(x.verified && x.verificationMode === 'manual')).length;
     const published = candidates.filter((x) => x.published).length;
+    const ignored = candidates.filter((x) => x.ignored).length;
     byId('pdfKpiCandidates').textContent = candidates.length;
     byId('pdfKpiPagesFoot').textContent = `${imp.result.numPages || 0} página${imp.result.numPages === 1 ? '' : 's'}`;
     byId('pdfKpiAuto').textContent = autoPending;
@@ -371,7 +372,7 @@
       ? `${M.formatDateOnly(validity.startAt)} a ${M.formatDateOnly(validity.endAt)}`
       : 'validade não confirmada automaticamente';
     const thresholdPct = Math.round((imp.threshold || .98) * 100);
-    byId('pdfImportMeta').innerHTML = `<div class="pdf-automation-summary">Arquivo: <strong>${M.escapeHtml(imp.result.fileName)}</strong> · ${imp.result.numPages} página${imp.result.numPages === 1 ? '' : 's'} · ${M.escapeHtml(validityText)} · SHA-256 ${M.escapeHtml((imp.result.hash || '').slice(0,16))}…<br><strong>${autoPending}</strong> automáticos aguardando publicação · <strong>${reviewPending}</strong> exceções para revisão · limite automático <strong>${thresholdPct}%</strong> · motor ${M.escapeHtml(imp.result.engineVersion || '2.2.0')} / PDF.js ${M.escapeHtml(imp.result.pdfjsVersion || '')}</div>`;
+    byId('pdfImportMeta').innerHTML = `<div class="pdf-automation-summary">Arquivo: <strong>${M.escapeHtml(imp.result.fileName)}</strong> · ${imp.result.numPages} página${imp.result.numPages === 1 ? '' : 's'} · ${M.escapeHtml(validityText)} · SHA-256 ${M.escapeHtml((imp.result.hash || '').slice(0,16))}…<br><strong>${autoPending}</strong> automáticos prontos · <strong>${manualReady}</strong> revisados prontos · <strong>${reviewPending}</strong> pendentes de revisão · <strong>${ignored}</strong> excluídos desta importação · limite automático <strong>${thresholdPct}%</strong> · motor ${M.escapeHtml(imp.result.engineVersion || '2.2.0')} / PDF.js ${M.escapeHtml(imp.result.pdfjsVersion || '')}</div>`;
 
     const q = M.normalizeText(byId('pdfCandidateSearch')?.value || '');
     const filter = byId('pdfCandidateFilter')?.value || 'all';
@@ -414,8 +415,8 @@
           <div class="pdf-confidence-track"><span style="width:${conf.n}%"></span></div>
           <span class="small muted">Associação dupla: ${Math.round(Number(x.associationAgreement || 0) * 100)}% · domínio do bloco: ${Math.round(Number(x.ownershipConfidence || 0) * 100)}% · coerência do bloco: ${Math.round(Number(x.clusterCoherence || 0) * 100)}%.</span>
         </div>
-        <div class="entity-actions" style="margin-top:12px">
-          <button class="btn btn-secondary btn-sm" type="button" data-pdf-review="${M.escapeHtml(x.id)}">${x.published ? 'Ver origem' : (x.automationDecision === 'auto' ? 'Ver evidência' : 'Revisar exceção')}</button>
+        <div class="entity-actions pdf-candidate-actions" style="margin-top:12px">
+          ${x.published ? `<button class="btn btn-secondary btn-sm" type="button" data-pdf-review="${M.escapeHtml(x.id)}">Ver origem</button>` : (x.ignored ? `<button class="btn btn-secondary btn-sm" type="button" data-pdf-restore="${M.escapeHtml(x.id)}">Restaurar candidato</button>` : `<button class="btn btn-secondary btn-sm" type="button" data-pdf-review="${M.escapeHtml(x.id)}">${x.automationDecision === 'auto' ? 'Ver evidência' : 'Revisar exceção'}</button><button class="btn btn-danger btn-sm" type="button" data-pdf-ignore-quick="${M.escapeHtml(x.id)}">Excluir da importação</button>`)}
         </div>
       </article>`;
     }).join('') : '<div class="empty">Nenhum candidato neste filtro.</div>';
@@ -429,6 +430,17 @@
     if (autoBtn) {
       autoBtn.disabled = autoPending === 0;
       autoBtn.textContent = autoPending ? `Publicar ${autoPending} automática${autoPending === 1 ? '' : 's'}` : 'Publicar automáticos seguros';
+    }
+    const readyBtn = byId('pdfPublishReadyBtn');
+    const readyCount = autoPending + manualReady;
+    if (readyBtn) {
+      readyBtn.disabled = readyCount === 0;
+      readyBtn.textContent = readyCount ? `Publicar ${readyCount} pronta${readyCount === 1 ? '' : 's'}` : 'Publicar tudo que está pronto';
+    }
+    const discardBtn = byId('pdfDiscardPendingBtn');
+    if (discardBtn) {
+      discardBtn.disabled = reviewPending === 0;
+      discardBtn.textContent = reviewPending ? `Excluir ${reviewPending} pendente${reviewPending === 1 ? '' : 's'}` : 'Excluir pendentes de revisão';
     }
   }
 
@@ -577,17 +589,67 @@
     M.toast(candidate.verified ? 'Oferta conferida e pronta para publicação.' : 'Revisão salva. O item ainda não será publicado.', candidate.verified ? 'success' : 'info');
   }
 
-  function ignorePdfCandidate() {
+  function markPdfCandidateIgnored(candidate, reason = 'manual_discard') {
+    if (!candidate || candidate.published) return false;
+    candidate.ignored = true;
+    candidate.verified = false;
+    candidate.verificationMode = '';
+    candidate.reviewed = true;
+    candidate.discardReason = reason;
+    candidate.discardedAt = Date.now();
+    candidate.discardedBy = state.user?.uid || '';
+    return true;
+  }
+
+  async function ignorePdfCandidate() {
     const imp = getPdfImport();
     const f = byId('pdfReviewForm');
     const candidate = imp?.candidates.find((x) => x.id === f.elements.candidateId.value);
-    if (!candidate || candidate.published) return;
-    candidate.ignored = true;
-    candidate.verified = false;
-    candidate.reviewed = true;
+    if (!markPdfCandidateIgnored(candidate, 'manual_review_discard')) return;
     M.closeModal('pdfReviewModal');
     renderPdfImport();
-    M.toast('Candidato ignorado. Nada foi gravado como promoção.', 'info');
+    audit('pdf_import_candidate_discarded', 'pdf_import', (imp?.result?.hash || '').slice(0,20), { candidateId:candidate.id, productName:candidate.productName, page:candidate.pageNumber, reason:'manual_review_discard' }).catch(console.error);
+    M.toast('Candidato excluído desta importação. Nada foi gravado em Promoções.', 'info');
+  }
+
+  async function discardPdfCandidateById(candidateId) {
+    const imp = getPdfImport();
+    const candidate = imp?.candidates.find((x) => x.id === candidateId);
+    if (!candidate || candidate.published || candidate.ignored) return;
+    if (!window.confirm(`Excluir "${candidate.productName}" desta importação? Esse candidato não será publicado.`)) return;
+    markPdfCandidateIgnored(candidate, 'quick_discard');
+    renderPdfImport();
+    audit('pdf_import_candidate_discarded', 'pdf_import', (imp?.result?.hash || '').slice(0,20), { candidateId:candidate.id, productName:candidate.productName, page:candidate.pageNumber, reason:'quick_discard' }).catch(console.error);
+    M.toast('Candidato excluído da importação.', 'info');
+  }
+
+  function restorePdfCandidate(candidateId) {
+    const imp = getPdfImport();
+    const candidate = imp?.candidates.find((x) => x.id === candidateId);
+    if (!candidate || candidate.published || !candidate.ignored) return;
+    candidate.ignored = false;
+    candidate.reviewed = false;
+    candidate.discardReason = '';
+    candidate.discardedAt = null;
+    candidate.discardedBy = '';
+    candidate.automationDecision = classifyPdfCandidate(candidate, imp.threshold || automationThreshold());
+    renderPdfImport();
+    M.toast('Candidato restaurado para a fila.', 'success');
+  }
+
+  async function discardAllPendingPdfCandidates() {
+    const imp = getPdfImport();
+    if (!imp) return;
+    refreshPdfClassifications();
+    const pending = imp.candidates.filter((x) => !x.published && !x.ignored && x.automationDecision !== 'auto' && !(x.verified && x.verificationMode === 'manual'));
+    if (!pending.length) { M.toast('Não há pendências de revisão para excluir.', 'info'); return; }
+    const ok = window.confirm(`Excluir ${pending.length} candidato${pending.length === 1 ? '' : 's'} que ainda precisa${pending.length === 1 ? '' : 'm'} de revisão?\n\nOs automáticos e os que você já revisou permanecerão prontos/publicados. Os excluídos NÃO serão gravados em Promoções.`);
+    if (!ok) return;
+    pending.forEach((candidate) => markPdfCandidateIgnored(candidate, 'bulk_pending_discard'));
+    byId('pdfCandidateFilter').value = 'all';
+    renderPdfImport();
+    audit('pdf_import_pending_bulk_discarded', 'pdf_import', (imp.result.hash || '').slice(0,20), { count:pending.length, fileName:imp.result.fileName, marketId:imp.marketId, unitId:imp.unitId }).catch(console.error);
+    M.toast(`${pending.length} pendência${pending.length === 1 ? '' : 's'} excluída${pending.length === 1 ? '' : 's'} da importação.`, 'success', 6500);
   }
 
   function pdfPromotionFingerprint(candidate, imp) {
@@ -754,6 +816,40 @@
     }
   }
 
+  async function publishReadyPdfCandidates() {
+    const imp = getPdfImport();
+    if (!imp) return;
+    refreshPdfClassifications();
+    const automatic = imp.candidates.filter((x) => !x.published && !x.ignored && x.automationDecision === 'auto');
+    const manual = imp.candidates.filter((x) => x.verified && x.verificationMode === 'manual' && !x.published && !x.ignored);
+    const total = automatic.length + manual.length;
+    if (!total) { M.toast('Não há ofertas prontas para publicar. Pendências de revisão permanecem fora do Firebase.', 'info'); return; }
+    const btn = byId('pdfPublishReadyBtn');
+    M.setBusy(btn, true, 'Publicando prontos...');
+    let created = 0;
+    let duplicates = 0;
+    try {
+      if (automatic.length) {
+        const result = await publishPdfCandidateSet(automatic, 'automatic', true);
+        created += result.created || 0;
+        duplicates += result.duplicates || 0;
+      }
+      if (manual.length) {
+        const result = await publishPdfCandidateSet(manual, 'manual', true);
+        created += result.created || 0;
+        duplicates += result.duplicates || 0;
+      }
+      const pending = imp.candidates.filter((x) => !x.published && !x.ignored && x.automationDecision !== 'auto' && !(x.verified && x.verificationMode === 'manual')).length;
+      M.toast(`${created} promoção${created === 1 ? '' : 'ões'} publicada${created === 1 ? '' : 's'}${duplicates ? ` · ${duplicates} duplicada${duplicates === 1 ? '' : 's'} ignorada${duplicates === 1 ? '' : 's'}` : ''}. ${pending ? `${pending} pendência${pending === 1 ? '' : 's'} continua${pending === 1 ? '' : 'm'} fora da publicação.` : 'Nenhuma pendência ficou para trás.'}`, 'success', 8000);
+    } catch (error) {
+      console.error(error);
+      M.toast(error.message || 'Falha ao publicar ofertas prontas.', 'error', 8000);
+    } finally {
+      M.setBusy(btn, false);
+      renderPdfImport();
+    }
+  }
+
   function bindActions() {
     byId('logoutBtn').addEventListener('click', M.logout);
     byId('userForm').addEventListener('submit', createUser);
@@ -765,8 +861,10 @@
     byId('pdfReviewForm').addEventListener('submit', savePdfReview);
     byId('pdfImportMarketId').addEventListener('change', refreshPdfImportUnitSelects);
     byId('pdfImportResetBtn').addEventListener('click', resetPdfImport);
+    byId('pdfPublishReadyBtn').addEventListener('click', publishReadyPdfCandidates);
     byId('pdfPublishVerifiedBtn').addEventListener('click', publishVerifiedPdfCandidates);
     byId('pdfPublishAutoBtn').addEventListener('click', () => publishAutomaticPdfCandidates(false));
+    byId('pdfDiscardPendingBtn').addEventListener('click', discardAllPendingPdfCandidates);
     byId('pdfAutomationMode').addEventListener('change', () => { if (state.pdfImport) { state.pdfImport.threshold = automationThreshold(); refreshPdfClassifications(); renderPdfImport(); } });
     byId('pdfIgnoreCandidateBtn').addEventListener('click', ignorePdfCandidate);
     byId('pdfCandidateSearch').addEventListener('input', renderPdfImport);
@@ -779,6 +877,8 @@
     document.addEventListener('click', async (event) => {
       const t=event.target.closest('button,a'); if(!t)return;
       if(t.dataset.pdfReview) { event.preventDefault(); event.stopPropagation(); await openPdfReview(t.dataset.pdfReview, t); return; }
+      if(t.dataset.pdfIgnoreQuick) { event.preventDefault(); event.stopPropagation(); await discardPdfCandidateById(t.dataset.pdfIgnoreQuick); return; }
+      if(t.dataset.pdfRestore) { event.preventDefault(); event.stopPropagation(); restorePdfCandidate(t.dataset.pdfRestore); return; }
       if(t.dataset.userToggle){
         const id=t.dataset.userToggle; const x=state.users[id];
         if(x){ const next=x.status==='active'?'blocked':'active'; await db.ref(`users/${id}`).update({status:next,updatedAt:serverTimestamp}); await audit('user_status_changed','user',id,{status:next}); M.toast(`Usuário ${next==='active'?'ativado':'bloqueado'}.`,'success'); }
