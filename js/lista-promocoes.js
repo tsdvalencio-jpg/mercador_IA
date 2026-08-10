@@ -227,6 +227,9 @@
       const price = M.formatCurrency(best.promo.price);
       const distance = Number(best.distanceKm || 0).toFixed(1).replace('.', ',');
       const countLabel = offers.length === 1 ? 'Ver oferta' : `Ver ${offers.length} ofertas`;
+      const priceCondition = best.promo.requiresClub
+        ? `💳 ${M.escapeHtml(best.promo.clubName || 'Preço Clube')}`
+        : (best.promo.priceKind === 'condition' ? '⚠️ preço com condição' : 'melhor preço encontrado');
 
       zone.innerHTML = `
         <div class="item-offer-best">
@@ -235,7 +238,7 @@
           <span class="item-offer-price">${price}</span>
         </div>
         <div class="item-offer-sub">
-          <span class="item-offer-distance">📍 ${distance} km · melhor preço encontrado</span>
+          <span class="item-offer-distance">📍 ${distance} km · ${priceCondition}</span>
           <button type="button" class="item-offer-action" data-offers-item="${M.escapeHtml(itemId)}">${countLabel}</button>
         </div>`;
       details.appendChild(zone);
@@ -291,9 +294,12 @@
         ${isNearest ? '<span class="offer-pill">📍 Mais perto</span>' : ''}
         <span class="offer-pill">${distance.toFixed(1).replace('.', ',')} km</span>
         ${saving > 0 ? `<span class="offer-pill best">economiza ${M.formatCurrency(saving)}</span>` : ''}
+        ${p.requiresClub ? `<span class="offer-pill">💳 ${M.escapeHtml(p.clubName || 'Preço Clube')}</span>` : ''}
+        ${p.priceKind === 'condition' ? '<span class="offer-pill">⚠️ preço com condição</span>' : ''}
         <span class="offer-pill best">✓ valor conferido</span>
         ${p.endAt ? `<span class="offer-pill">até ${M.formatDateTime(p.endAt)}</span>` : ''}
       </div>
+      ${p.conditions ? `<div class="small muted" style="margin-top:9px"><strong>Condições:</strong> ${M.escapeHtml(p.conditions)}</div>` : ''}
       <div class="offer-sheet-actions"><a class="item-offer-action" target="_blank" rel="noopener" href="${route}">Abrir rota</a></div>
     </article>`;
   }
