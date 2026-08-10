@@ -61,18 +61,20 @@
       location.replace('./index.html');
       throw new Error('Não autenticado.');
     }
+    let profile;
     try {
-      const profile = await M.ensureAuthenticatedProfile(user);
-      if (!profile || !allowedRoles.includes(profile.role)) {
-        location.replace('./usuario.html');
-        throw new Error('Perfil sem permissão para esta área.');
-      }
-      return { user, profile };
+      profile = await M.ensureAuthenticatedProfile(user);
     } catch (error) {
       await auth.signOut().catch(() => {});
       location.replace(`./index.html?erro=${encodeURIComponent(error.message)}`);
       throw error;
     }
+    if (!profile || !allowedRoles.includes(profile.role)) {
+      // Falta de papel/permissão não é logout: apenas devolve o usuário ao início.
+      location.replace('./inicio.html');
+      throw new Error('Perfil sem permissão para esta área.');
+    }
+    return { user, profile };
   };
 
   M.routeAuthenticatedUser = async function routeAuthenticatedUser(user) {
@@ -80,7 +82,7 @@
     if (['superadmin', 'admin'].includes(profile.role)) {
       location.replace('./admin.html');
     } else {
-      location.replace('./usuario.html');
+      location.replace('./inicio.html');
     }
   };
 

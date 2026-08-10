@@ -1,12 +1,12 @@
-const CACHE = 'mercador-ia-shell-v2.6.0';
+const CACHE = 'mercador-ia-shell-v2.7.0';
 
 // Shell enxuto do consumidor. O painel Admin/PDF é carregado somente quando
 // um administrador realmente o acessa — não pesa no PWA de todos os usuários.
 const USER_SHELL = [
-  './', './index.html', './cadastro.html', './usuario.html',
-  './css/app.css', './css/auth.css',
+  './', './index.html', './cadastro.html', './inicio.html', './usuario.html',
+  './css/app.css', './css/auth.css', './css/inicio.css',
   './js/firebase-config.js', './js/utils.js', './js/auth.js', './js/smart-matcher.js',
-  './js/index.js', './js/cadastro.js', './js/lista-promocoes.js', './js/pwa.js',
+  './js/index.js', './js/cadastro.js', './js/inicio.js', './js/lista-promocoes.js', './js/pwa.js',
   './manifest.webmanifest', './assets/icon.svg', './assets/icon-192.png', './assets/icon-512.png'
 ];
 

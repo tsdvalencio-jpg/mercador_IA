@@ -15,7 +15,7 @@
     
     <script src="./js/firebase-config.js?v=2.6.0"></script>
     <script src="./js/utils.js?v=2.6.0"></script>
-    <script src="./js/auth.js?v=2.6.0"></script>
+    <script src="./js/auth.js?v=2.7.0"></script>
     <script src="./js/smart-matcher.js?v=2.6.0"></script>
 
     <style>
@@ -282,7 +282,7 @@
     <div class="app-container">
         <header class="header-section">
             <div class="top-bar">
-                <a href="#" id="back-button">❮ <span>Voltar</span></a>
+                <a href="./inicio.html" id="back-button">⌂ <span>Início</span></a>
                 <div class="purchase-title"><h1>Sua Compra</h1><span id="purchase-progress">Carregando lista...</span></div>
                 <div id="header-total">R$ 0,00</div>
             </div>
@@ -417,6 +417,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 reportsRef = database.ref(`purchase_reports/${userId}`);
                 document.querySelector('.app-container').classList.add('loaded');
                 interactions.initDataListeners();
+                const requestedTab = new URLSearchParams(window.location.search).get('tab');
+                if (['faltando','comprados','adiados','relatorios'].includes(requestedTab) && requestedTab !== 'faltando') {
+                    setTimeout(() => interactions.switchTab(requestedTab), 0);
+                }
             } catch (error) {
                 document.body.innerHTML = `<div style="padding:20px;text-align:center"><h2>Acesso Negado</h2><p>${String(error.message || error)}</p><p><a href="./index.html">Voltar ao login</a></p></div>`;
             }
@@ -1099,7 +1103,6 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.printReportBtn.addEventListener('click', interactions.printReport);
     ui.finalizePurchaseBtn.addEventListener('click', interactions.finalizeAndReset);
     ui.toggleCalcBtn.addEventListener('click', interactions.toggleCalculator);
-    document.getElementById('back-button').addEventListener('click', async (e) => { e.preventDefault(); await window.MercadorIA.logout(); });
 });
 
 let newWorker;

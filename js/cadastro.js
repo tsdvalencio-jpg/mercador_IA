@@ -36,7 +36,7 @@
       });
       await db.ref(`user_settings/${uid}`).set({ radiusKm: 5, updatedAt: serverTimestamp });
       M.toast('Conta criada com sucesso.', 'success');
-      location.replace('./usuario.html');
+      location.replace('./inicio.html');
     } catch (error) {
       const messages = {
         'auth/email-already-in-use': 'Já existe uma conta com este e-mail.',
