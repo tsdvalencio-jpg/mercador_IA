@@ -7,8 +7,8 @@
   <title>Mercador IA — Administração</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./css/app.css?v=2.6.0">
-  <link rel="stylesheet" href="./css/admin.css?v=2.6.0">
+  <link rel="stylesheet" href="./css/app.css?v=2.8.0">
+  <link rel="stylesheet" href="./css/admin.css?v=2.8.0">
 </head>
 <body>
   <div id="loading" class="loading-screen"><div class="loading-box"><div class="spinner"></div><strong>Validando acesso administrativo...</strong></div></div>
@@ -57,8 +57,9 @@
       </section>
 
       <section id="section-users" class="admin-section">
-        <div class="page-heading"><div><div class="eyebrow">Acessos</div><h1>Usuários</h1><p class="muted">Cadastre consumidores e controle o status das contas.</p></div><button class="btn btn-primary" data-open-modal="userModal">+ Novo usuário</button></div>
-        <div class="admin-toolbar"><input class="input searchbox" id="userSearch" placeholder="Buscar nome ou e-mail"><span class="badge info" id="userCountBadge">0 usuários</span></div>
+        <div class="page-heading"><div><div class="eyebrow">Acessos</div><h1>Usuários</h1><p class="muted">Cadastros públicos entram como pendentes. O SuperAdmin revisa contato, aprova, bloqueia, edita ou exclui o acesso e os dados do aplicativo.</p></div><button class="btn btn-primary" data-open-modal="userModal">+ Novo usuário</button></div>
+        <div class="user-pending-banner" id="userPendingBanner" hidden><strong id="userPendingCount">0</strong><span>cadastros aguardando liberação</span><button type="button" class="btn btn-primary btn-sm" id="showPendingUsersBtn">Ver pendentes</button></div>
+        <div class="admin-toolbar"><div class="toolbar-left"><input class="input searchbox" id="userSearch" placeholder="Buscar nome, e-mail ou telefone"><select class="select" id="userStatusFilter" style="width:auto"><option value="all">Atuais</option><option value="pending">Pendentes</option><option value="active">Ativos</option><option value="blocked">Bloqueados</option><option value="rejected">Rejeitados</option><option value="deleted">Excluídos</option></select></div><span class="badge info" id="userCountBadge">0 usuários</span></div>
         <div id="usersList" class="list"></div>
       </section>
 
@@ -128,7 +129,7 @@
             <div class="toolbar-left">
               <input class="input searchbox" id="pdfCandidateSearch" placeholder="Buscar candidato">
               <select class="select" id="pdfCandidateFilter" style="width:auto">
-                <option value="all">Todos</option>
+                <option value="all">Atuais</option>
                 <option value="auto">Automáticos</option>
                 <option value="pending">A revisar</option>
                 <option value="verified">Conferidos manualmente</option>
@@ -165,7 +166,9 @@
     <button class="active" data-section="dashboard">▦<br>Início</button><button data-section="users">👥<br>Usuários</button><button data-section="markets">🏪<br>Mercados</button><button data-section="units">📍<br>Unidades</button><button data-section="promotions">🔥<br>Ofertas</button><button data-section="pdfimport">📄<br>PDF</button><button data-section="inbox">📥<br>Inbox</button><button data-section="audit">🛡️<br>Auditoria</button>
   </nav>
 
-  <div id="userModal" class="modal" hidden><div class="modal-panel"><div class="modal-head"><div><strong>Novo usuário</strong><div class="small muted">Cria conta no Firebase Authentication sem desconectar o administrador.</div></div><button type="button" class="icon-btn" data-close-modal="userModal">✕</button></div><form id="userForm"><div class="modal-body"><div class="form-grid"><div class="field"><label>Nome</label><input class="input" name="name" required maxlength="80"></div><div class="field"><label>E-mail</label><input class="input" name="email" type="email" required></div><div class="field"><label>Senha inicial</label><input class="input" name="password" type="password" minlength="6" required></div><div class="field"><label>Perfil</label><select class="select" name="role" id="newUserRole"><option value="user">Usuário consumidor</option><option value="admin">Administrador</option></select></div></div><p class="field-help" style="margin-top:12px">A senha não é salva no Realtime Database. O Firebase Authentication armazena a credencial com segurança.</p></div><div class="modal-foot"><button class="btn btn-secondary" type="button" data-close-modal="userModal">Cancelar</button><button class="btn btn-primary" id="userSubmit" type="submit">Criar usuário</button></div></form></div></div>
+  <div id="userModal" class="modal" hidden><div class="modal-panel"><div class="modal-head"><div><strong>Novo usuário</strong><div class="small muted">Conta criada pelo administrador já entra liberada. Cadastros feitos pelo link público ficam pendentes.</div></div><button type="button" class="icon-btn" data-close-modal="userModal">✕</button></div><form id="userForm"><div class="modal-body"><div class="form-grid"><div class="field"><label>Nome</label><input class="input" name="name" required maxlength="100"></div><div class="field"><label>E-mail de login</label><input class="input" name="email" type="email" required></div><div class="field"><label>WhatsApp / celular</label><input class="input" name="phone" inputmode="tel" maxlength="24" placeholder="(17) 99999-9999"></div><div class="field"><label>E-mail de contato</label><input class="input" name="contactEmail" type="email" placeholder="Se diferente do login"></div><div class="field"><label>Senha inicial</label><input class="input" name="password" type="password" minlength="6" required></div><div class="field"><label>Perfil</label><select class="select" name="role" id="newUserRole"><option value="user">Usuário consumidor</option><option value="admin">Administrador</option></select></div><div class="field full"><label>Observação interna</label><textarea class="textarea" name="notes" maxlength="500" placeholder="Informação visível somente na administração"></textarea></div></div><p class="field-help" style="margin-top:12px">A senha nunca é salva no Realtime Database.</p></div><div class="modal-foot"><button class="btn btn-secondary" type="button" data-close-modal="userModal">Cancelar</button><button class="btn btn-primary" id="userSubmit" type="submit">Criar usuário</button></div></form></div></div>
+
+  <div id="userEditModal" class="modal" hidden><div class="modal-panel"><div class="modal-head"><div><strong>Editar usuário</strong><div class="small muted">O e-mail de login do Firebase Authentication é exibido apenas como referência. Dados de contato podem ser atualizados aqui.</div></div><button type="button" class="icon-btn" data-close-modal="userEditModal">✕</button></div><form id="userEditForm"><input type="hidden" name="id"><div class="modal-body"><div class="form-grid"><div class="field"><label>Nome</label><input class="input" name="name" required maxlength="100"></div><div class="field"><label>E-mail de login</label><input class="input" name="email" type="email" readonly></div><div class="field"><label>WhatsApp / celular</label><input class="input" name="phone" inputmode="tel" maxlength="24"></div><div class="field"><label>E-mail de contato</label><input class="input" name="contactEmail" type="email"></div><div class="field"><label>Perfil</label><select class="select" name="role"><option value="user">Usuário consumidor</option><option value="admin">Administrador</option></select></div><div class="field"><label>Status</label><select class="select" name="status"><option value="pending">Pendente</option><option value="active">Ativo</option><option value="blocked">Bloqueado</option><option value="rejected">Rejeitado</option></select></div><div class="field full"><label>Observação interna</label><textarea class="textarea" name="notes" maxlength="500"></textarea></div></div><div class="field-help" style="margin-top:12px">Para alterar o e-mail usado no login do Firebase Authentication será necessário o backend administrativo. Aqui o e-mail de contato pode ser alterado sem criar divergência de credencial.</div></div><div class="modal-foot"><button class="btn btn-secondary" type="button" data-close-modal="userEditModal">Cancelar</button><button class="btn btn-primary" id="userEditSubmit" type="submit">Salvar alterações</button></div></form></div></div>
 
   <div id="marketModal" class="modal" hidden><div class="modal-panel"><div class="modal-head"><strong id="marketModalTitle">Cadastrar mercado</strong><button type="button" class="icon-btn" data-close-modal="marketModal">✕</button></div><form id="marketForm"><input type="hidden" name="id"><div class="modal-body"><div class="form-grid"><div class="field"><label>Nome comercial</label><input class="input" name="name" required maxlength="120"></div><div class="field"><label>Razão social (opcional)</label><input class="input" name="legalName" maxlength="150"></div><div class="field"><label>CNPJ (opcional)</label><input class="input" name="cnpj" maxlength="20"></div><div class="field"><label>WhatsApp/contato</label><input class="input" name="contact" maxlength="40"></div><div class="field full"><label>Site ou referência oficial (opcional)</label><input class="input" name="website" type="url" placeholder="https://..."></div><label class="checkline full"><input type="checkbox" name="active" checked><span>Mercado ativo na plataforma</span></label></div></div><div class="modal-foot"><button class="btn btn-secondary" type="button" data-close-modal="marketModal">Cancelar</button><button class="btn btn-primary" type="submit">Salvar mercado</button></div></form></div></div>
 
@@ -226,17 +229,17 @@
     </div>
   </div>
 
-  <footer class="footer"><div class="shell">Powered by <strong>thIAguinho Soluções Digitais</strong> · Mercador IA V2.6.0</div></footer>
+  <footer class="footer"><div class="shell">Powered by <strong>thIAguinho Soluções Digitais</strong> · Mercador IA V2.8.0</div></footer>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
-  <script src="./js/firebase-config.js?v=2.6.0"></script>
-  <script src="./js/utils.js?v=2.6.0"></script>
-  <script src="./js/auth.js?v=2.6.0"></script>
-  <script src="./js/smart-matcher.js?v=2.6.0"></script>
-  <script src="./js/pdf-encarte-importer.js?v=2.6.0"></script>
-  <script src="./js/admin.js?v=2.6.0"></script>
-  <script src="./js/pwa.js?v=2.6.0"></script>
+  <script src="./js/firebase-config.js?v=2.8.0"></script>
+  <script src="./js/utils.js?v=2.8.0"></script>
+  <script src="./js/auth.js?v=2.8.0"></script>
+  <script src="./js/smart-matcher.js?v=2.8.0"></script>
+  <script src="./js/pdf-encarte-importer.js?v=2.8.0"></script>
+  <script src="./js/admin.js?v=2.8.0"></script>
+  <script src="./js/pwa.js?v=2.8.0"></script>
 </body>
 </html>

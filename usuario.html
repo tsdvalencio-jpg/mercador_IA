@@ -13,10 +13,10 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
     
-    <script src="./js/firebase-config.js?v=2.6.0"></script>
-    <script src="./js/utils.js?v=2.6.0"></script>
-    <script src="./js/auth.js?v=2.7.0"></script>
-    <script src="./js/smart-matcher.js?v=2.6.0"></script>
+    <script src="./js/firebase-config.js?v=2.8.0"></script>
+    <script src="./js/utils.js?v=2.8.0"></script>
+    <script src="./js/auth.js?v=2.8.0"></script>
+    <script src="./js/smart-matcher.js?v=2.8.0"></script>
 
     <style>
         :root {
@@ -263,7 +263,11 @@
             .item-actions-inline{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.item-action-btn{padding:6px 4px;min-width:0}.item-action-btn.danger{margin-left:0}
             .report-edit-row{grid-template-columns:minmax(0,1fr) 62px 78px 36px;gap:4px;padding:6px}.report-edit-row input{padding:7px 5px;font-size:14px}
         }
-    </style>
+    
+        /* Mercador IA V2.8 — troca de abas instantânea */
+        .tab-btn{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+        .list-container{contain:layout style paint}
+</style>
 </head>
 <body>
     <div id="update-banner">
@@ -282,7 +286,7 @@
     <div class="app-container">
         <header class="header-section">
             <div class="top-bar">
-                <a href="./inicio.html" id="back-button">⌂ <span>Início</span></a>
+                <a href="#" id="back-button">❮ <span>Voltar</span></a>
                 <div class="purchase-title"><h1>Sua Compra</h1><span id="purchase-progress">Carregando lista...</span></div>
                 <div id="header-total">R$ 0,00</div>
             </div>
@@ -417,10 +421,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 reportsRef = database.ref(`purchase_reports/${userId}`);
                 document.querySelector('.app-container').classList.add('loaded');
                 interactions.initDataListeners();
-                const requestedTab = new URLSearchParams(window.location.search).get('tab');
-                if (['faltando','comprados','adiados','relatorios'].includes(requestedTab) && requestedTab !== 'faltando') {
-                    setTimeout(() => interactions.switchTab(requestedTab), 0);
-                }
             } catch (error) {
                 document.body.innerHTML = `<div style="padding:20px;text-align:center"><h2>Acesso Negado</h2><p>${String(error.message || error)}</p><p><a href="./index.html">Voltar ao login</a></p></div>`;
             }
@@ -436,7 +436,7 @@ document.addEventListener('DOMContentLoaded', () => {
         reports: [],
         activeItemId: null,
         calcDisplay: '0',
-        currentTab: 'faltando',
+        currentTab: (() => { const t=new URLSearchParams(location.search).get('tab'); return ['faltando','comprados','adiados','relatorios'].includes(t) ? t : 'faltando'; })(),
         selectedReportId: null,
         editingReportId: null,
         reportsLoaded: false,
@@ -817,17 +817,16 @@ document.addEventListener('DOMContentLoaded', () => {
         (tabs.length ? tabs : ['faltando','comprados','adiados']).forEach((tab)=>state.dirtyLists.add(tab));
     };
 
-    const renderAfterListMutation = (affectedTabs = []) => {
+    const renderAfterListMutation = (affectedTabs = [], { membershipChanged = false } = {}) => {
         markListsDirty(...affectedTabs);
         render.currentList();
         render.total();
         render.tabs();
         render.activeItemDisplay();
         render.activeItemHighlight();
-        renderSmartSuggestions();
+        if (membershipChanged) renderSmartSuggestions();
         perfStore.saveList();
         emitListState();
-        preRenderHiddenListsInIdle();
     };
 
     const localUpdateItem = (id, updates) => {
@@ -835,8 +834,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (index < 0) return null;
         const before = { ...state.itens[index] };
         state.itens[index] = { ...state.itens[index], ...updates };
-        const tabFor = (status) => status === 'comprado' ? 'comprados' : status === 'adiado' ? 'adiados' : 'faltando';
-        renderAfterListMutation([tabFor(before.status), tabFor(state.itens[index].status)]);
+        renderAfterListMutation([tabForStatus(before.status), tabForStatus(state.itens[index].status)]);
         return before;
     };
 
@@ -888,46 +886,94 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally { state.reportsLoadingMore=false; render.reports(); render.tabs(); }
     };
 
-    const preRenderHiddenListsInIdle = () => {
-        const work = (deadline) => {
-            const tabs=['faltando','comprados','adiados'].filter((tab)=>tab!==state.currentTab && state.dirtyLists.has(tab));
-            for (const tab of tabs) {
-                if (deadline && typeof deadline.timeRemaining === 'function' && deadline.timeRemaining() < 5 && !deadline.didTimeout) break;
-                render.list(tab);
-            }
-        };
-        if ('requestIdleCallback' in window) requestIdleCallback(work, { timeout:1200 });
-        else setTimeout(()=>work(null),180);
+    const tabForStatus = (status) => status === 'comprado' ? 'comprados' : status === 'adiado' ? 'adiados' : 'faltando';
+
+    const syncActiveTabUI = () => {
+        document.querySelectorAll('.tab-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === state.currentTab));
+        document.querySelectorAll('.list-container').forEach((cont) => cont.classList.toggle('active', cont.id === `lista-${state.currentTab}-container`));
     };
+
+    let remoteFlushTimer = null;
+    const pendingRemoteTabs = new Set();
+    let pendingRemoteMembershipChange = false;
+
+    const scheduleRemoteFlush = () => {
+        clearTimeout(remoteFlushTimer);
+        remoteFlushTimer = setTimeout(() => {
+            const affected = [...pendingRemoteTabs];
+            pendingRemoteTabs.clear();
+            affected.forEach((tab)=>state.dirtyLists.add(tab));
+            const currentAffected = affected.includes(state.currentTab);
+            if (currentAffected) render.currentList();
+            render.total();
+            render.tabs();
+            render.activeItemDisplay();
+            render.activeItemHighlight();
+            if (pendingRemoteMembershipChange) renderSmartSuggestions();
+            pendingRemoteMembershipChange = false;
+            perfStore.saveList();
+            emitListState();
+        }, 24);
+    };
+
+    const applyRemoteItem = (id, raw, mode) => {
+        const key=String(id);
+        const index=state.itens.findIndex((item)=>String(item.id)===key);
+        const before=index>=0 ? { ...state.itens[index] } : null;
+        if(mode==='removed') {
+            if(index<0) return;
+            state.itens.splice(index,1);
+            pendingRemoteTabs.add(tabForStatus(before.status));
+            pendingRemoteMembershipChange=true;
+            if(String(state.activeItemId)===key) state.activeItemId=null;
+            scheduleRemoteFlush();
+            return;
+        }
+        const after={ ...(raw || {}), id:key };
+        const beforeSig=before ? listSyncSignature([before]) : '';
+        const afterSig=listSyncSignature([after]);
+        if(before && beforeSig===afterSig) return;
+        if(index>=0) state.itens[index]=after; else state.itens.push(after);
+        if(before) pendingRemoteTabs.add(tabForStatus(before.status));
+        pendingRemoteTabs.add(tabForStatus(after.status));
+        pendingRemoteMembershipChange = pendingRemoteMembershipChange || !before || before.nome !== after.nome;
+        scheduleRemoteFlush();
+    };
+
 
     const interactions = {
         initDataListeners: () => {
             if (!listRef) return;
             store.loadUI();
             render.calculator();
+            syncActiveTabUI();
             const hadCache = perfStore.loadCachedList();
             if (hadCache) {
-                render.all();
-                emitListState();
-                preRenderHiddenListsInIdle();
+                markListsDirty();
+                render.currentList(true);
+                render.total(); render.tabs(); renderSmartSuggestions(); emitListState();
             } else {
                 render.currentList(true); render.tabs(); render.total();
             }
-            listRef.on('value', (snapshot) => {
-                const data = snapshot.val();
-                const incoming = data ? Object.keys(data).map(key => ({ ...data[key], id: key })) : [];
-                const changed = listSyncSignature(incoming) !== listSyncSignature(state.itens);
-                state.itens = incoming;
-                state.listLoaded = true;
-                // Escritas otimistas já atualizaram a tela. Quando o Firebase apenas
-                // confirma exatamente o mesmo estado, não reconstruímos o DOM de novo.
-                if (!changed) return;
-                markListsDirty();
-                render.currentList(true);
-                render.total(); render.tabs(); render.activeItemDisplay(); render.activeItemHighlight(); renderSmartSuggestions();
-                perfStore.saveList(); emitListState();
-                preRenderHiddenListsInIdle();
-            });
+
+            // Sincronização colaborativa incremental. Depois da carga inicial, cada aparelho
+            // recebe somente o item alterado em vez de baixar/reprocessar a lista inteira.
+            listRef.on('child_added', (snapshot) => applyRemoteItem(snapshot.key, snapshot.val(), 'added'));
+            listRef.on('child_changed', (snapshot) => applyRemoteItem(snapshot.key, snapshot.val(), 'changed'));
+            listRef.on('child_removed', (snapshot) => applyRemoteItem(snapshot.key, null, 'removed'));
+
+            // Uma leitura canônica inicial elimina itens obsoletos de um cache local antigo.
+            // Não existe listener `value` permanente: após isso o fluxo é somente incremental.
+            listRef.once('value').then((snapshot) => {
+                const data=snapshot.val() || {};
+                const incoming=Object.entries(data).map(([id,value])=>({ ...(value||{}), id }));
+                if(listSyncSignature(incoming)!==listSyncSignature(state.itens)){
+                    state.itens=incoming; state.listLoaded=true; markListsDirty();
+                    render.currentList(true); render.total(); render.tabs(); renderSmartSuggestions();
+                    perfStore.saveList(); emitListState();
+                } else state.listLoaded=true;
+                if(state.currentTab==='relatorios') loadRecentReports({silent:false});
+            }).catch((error)=>console.error('Falha na sincronização inicial da lista:',error));
             updatePurchaseLocationOptions();
         },
         addItemByName: async (rawName) => {
@@ -941,17 +987,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const newItemId=String(Date.now());
             const item={ id:newItemId, nome, emoji:getEmojiForItem(nome), status:'faltando', quantidade:1, preco:0, createdAt:Date.now() };
-            state.itens.push(item); renderAfterListMutation(['faltando']); ui.input.value=''; ui.input.focus();
+            state.itens.push(item); renderAfterListMutation(['faltando'], { membershipChanged:true }); ui.input.value=''; ui.input.focus();
             try { await listRef.child(newItemId).set({ nome:item.nome, emoji:item.emoji, status:item.status, quantidade:1, preco:0, createdAt:item.createdAt }); }
-            catch(error){ state.itens=state.itens.filter((x)=>String(x.id)!==newItemId); renderAfterListMutation(['faltando']); window.MercadorIA?.toast?.('Não foi possível adicionar o item.','error'); }
+            catch(error){ state.itens=state.itens.filter((x)=>String(x.id)!==newItemId); renderAfterListMutation(['faltando'], { membershipChanged:true }); window.MercadorIA?.toast?.('Não foi possível adicionar o item.','error'); }
         },
         addItem: (e) => { e.preventDefault(); interactions.addItemByName(ui.input.value); },
         deleteItem: async (id) => {
             if (!confirm('Tem certeza que deseja remover este item?')) return;
             const index=state.itens.findIndex((x)=>String(x.id)===String(id)); if(index<0)return;
             const removed=state.itens[index]; state.itens.splice(index,1); if (state.activeItemId === id) state.activeItemId = null;
-            renderAfterListMutation([removed.status==='comprado'?'comprados':removed.status==='adiado'?'adiados':'faltando']);
-            try { await listRef.child(id).remove(); } catch(error){ state.itens.splice(index,0,removed); renderAfterListMutation(); window.MercadorIA?.toast?.('Não foi possível excluir o item.','error'); }
+            renderAfterListMutation([tabForStatus(removed.status)], { membershipChanged:true });
+            try { await listRef.child(id).remove(); } catch(error){ state.itens.splice(index,0,removed); renderAfterListMutation([tabForStatus(removed.status)], { membershipChanged:true }); window.MercadorIA?.toast?.('Não foi possível excluir o item.','error'); }
         },
         deleteReport: async (reportId) => {
             if (!confirm('Tem certeza que deseja excluir este relatório? Esta ação não pode ser desfeita.')) return;
@@ -983,8 +1029,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const oldTab=state.currentTab; const oldContainer=document.getElementById(`lista-${oldTab}-container`);
             if(oldContainer) state.tabScroll[oldTab]=oldContainer.scrollTop||window.scrollY||0;
             state.currentTab = tabName;
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab===tabName));
-            document.querySelectorAll('.list-container').forEach(cont => cont.classList.toggle('active', cont.id===`lista-${tabName}-container`));
+            syncActiveTabUI();
             if(tabName==='relatorios') loadRecentReports({ silent:false }); else render.list(tabName);
             requestAnimationFrame(()=>{ const target=document.getElementById(`lista-${tabName}-container`); if(target && state.tabScroll[tabName]) target.scrollTop=state.tabScroll[tabName]; });
         },
@@ -1087,7 +1132,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.smartSuggestions?.addEventListener('click',(e)=>{const btn=e.target.closest('[data-smart-add]');if(btn)interactions.addItemByName(decodeURIComponent(btn.dataset.smartAdd));});
     document.addEventListener('click',(e)=>{if(!e.target.closest('#form-adicionar-item,#smart-suggestions') && ui.smartSuggestions)ui.smartSuggestions.hidden=true;});
     ui.keypad.addEventListener('click', e => { if (e.target.tagName === 'BUTTON') calculator.handleInput(e.target.textContent, e.target.dataset.action); });
-    ui.tabs.addEventListener('click', e => { if (e.target.tagName === 'BUTTON') interactions.handleTabClick(e.target.dataset.tab); });
+    ui.tabs.addEventListener('click', e => { const btn=e.target.closest('.tab-btn'); if(btn) interactions.handleTabClick(btn.dataset.tab); });
     document.getElementById('lista-relatorios').addEventListener('click', e => { const moreBtn=e.target.closest('[data-load-more-reports]'); if(moreBtn){loadMoreReports();return;} const deleteBtn=e.target.closest('[data-delete-report]'); if(deleteBtn){interactions.deleteReport(deleteBtn.dataset.deleteReport);return;} const editBtn=e.target.closest('[data-edit-report]'); if(editBtn){interactions.openReportEdit(editBtn.dataset.editReport);return;} const reportRow=e.target.closest('.report-item'); if(reportRow)interactions.showReport(reportRow.dataset.id); });
     ui.appContainer.addEventListener('click', e => { if(e.target.closest('.item-offer-action,.offer-sheet-overlay'))return; const row=e.target.closest('.item-row'); if(!row)return; const id=row.dataset.id; const item=state.itens.find(i=>i.id===id); if(!item)return; if(e.target.closest('[data-item-delete]')){interactions.deleteItem(id);return;} if(e.target.closest('[data-item-defer]')){interactions.updateItem(id,{status:'adiado'});if(state.activeItemId===id)state.activeItemId=null;return;} if(e.target.closest('[data-item-restore]')){interactions.updateItem(id,{status:'faltando',preco:0,quantidade:1});return;} if(e.target.closest('[data-item-select]')){interactions.selectItem(id);return;} if(item.status==='faltando' && e.target.closest('.item-details'))interactions.selectItem(id); });
     ui.btnFinalizar.addEventListener('click', interactions.openReportModal);
@@ -1103,6 +1148,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.printReportBtn.addEventListener('click', interactions.printReport);
     ui.finalizePurchaseBtn.addEventListener('click', interactions.finalizeAndReset);
     ui.toggleCalcBtn.addEventListener('click', interactions.toggleCalculator);
+    document.getElementById('back-button').addEventListener('click', async (e) => { e.preventDefault(); await window.MercadorIA.logout(); });
 });
 
 let newWorker;
@@ -1155,6 +1201,6 @@ window.addEventListener('appinstalled', () => {
     deferredPrompt = null;
 });
 </script>
-    <script src="./js/lista-promocoes.js?v=2.6.0"></script>
+    <script src="./js/lista-promocoes.js?v=2.8.0"></script>
 </body>
 </html>

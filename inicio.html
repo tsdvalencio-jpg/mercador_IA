@@ -8,7 +8,7 @@
   <title>Mercador IA — Início</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./css/inicio.css?v=2.7.0">
+  <link rel="stylesheet" href="./css/inicio.css?v=2.8.0">
 </head>
 <body>
   <div class="home-shell" hidden id="homeShell">
@@ -21,26 +21,22 @@
     </header>
 
     <main class="home-main">
-      <section class="welcome-card">
+      <section class="welcome-card compact-welcome">
         <div>
-          <span class="eyebrow">Início</span>
+          <span class="eyebrow">Sua compra</span>
           <h1 id="welcomeTitle">Olá</h1>
-          <p>Veja sua lista, acompanhe o andamento da compra e encontre ofertas próximas sem sair do seu fluxo.</p>
+          <p>Resumo rápido. Toque em um indicador para abrir exatamente a parte da lista que precisa.</p>
         </div>
-        <a class="primary-action" href="./usuario.html">🛒 Abrir minha lista</a>
       </section>
 
-      <section class="stats-grid" aria-label="Resumo da lista">
-        <article class="stat-card"><span>📝</span><strong id="pendingCount">0</strong><small>A comprar</small></article>
-        <article class="stat-card"><span>🛒</span><strong id="boughtCount">0</strong><small>Comprados</small></article>
-        <article class="stat-card"><span>⏸</span><strong id="deferredCount">0</strong><small>Adiados</small></article>
-        <article class="stat-card money"><span>💰</span><strong id="cartTotal">R$ 0,00</strong><small>Total lançado</small></article>
+      <section class="stats-grid smart-links" aria-label="Resumo da lista">
+        <a class="stat-card" href="./usuario.html?tab=faltando"><span>📝</span><strong id="pendingCount">0</strong><small>A comprar</small></a>
+        <a class="stat-card" href="./usuario.html?tab=comprados"><span>🛒</span><strong id="boughtCount">0</strong><small>Comprados</small></a>
+        <a class="stat-card" href="./usuario.html?tab=adiados"><span>⏸</span><strong id="deferredCount">0</strong><small>Adiados</small></a>
+        <a class="stat-card money" href="./usuario.html?tab=comprados"><span>💰</span><strong id="cartTotal">R$ 0,00</strong><small>Total lançado</small></a>
       </section>
 
-      <section class="quick-grid" aria-label="Acessos rápidos">
-        <a class="quick-card" href="./usuario.html"><span class="quick-icon">🛒</span><span><strong>Minha lista</strong><small>Adicionar, lançar preço e finalizar compra</small></span><b>›</b></a>
-        <a class="quick-card" href="./usuario.html?tab=relatorios"><span class="quick-icon">🧾</span><span><strong>Relatórios</strong><small>Compras finalizadas e histórico</small></span><b>›</b></a>
-      </section>
+      <a class="single-report-link" href="./usuario.html?tab=relatorios"><span>🧾</span><span><strong>Relatórios de compras</strong><small>Histórico, edição e locais das compras</small></span><b>›</b></a>
 
       <section class="offers-card" id="offersCard">
         <div class="section-head">
@@ -68,10 +64,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
-  <script src="./js/firebase-config.js?v=2.6.0"></script>
-  <script src="./js/utils.js?v=2.6.0"></script>
-  <script src="./js/auth.js?v=2.7.0"></script>
-  <script src="./js/smart-matcher.js?v=2.6.0"></script>
-  <script src="./js/inicio.js?v=2.7.0"></script>
+  <script src="./js/firebase-config.js?v=2.8.0"></script>
+  <script src="./js/utils.js?v=2.8.0"></script>
+  <script src="./js/auth.js?v=2.8.0"></script>
+  <script src="./js/smart-matcher.js?v=2.8.0"></script>
+  <script src="./js/inicio.js?v=2.8.0"></script>
 </body>
 </html>

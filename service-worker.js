@@ -1,4 +1,4 @@
-const CACHE = 'mercador-ia-shell-v2.7.0';
+const CACHE = 'mercador-ia-shell-v2.8.0';
 
 // Shell enxuto do consumidor. O painel Admin/PDF é carregado somente quando
 // um administrador realmente o acessa — não pesa no PWA de todos os usuários.

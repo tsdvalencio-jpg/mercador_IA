@@ -25,6 +25,7 @@
 
   const qs = new URLSearchParams(location.search);
   if (qs.get('erro')) M.toast(qs.get('erro'), 'error', 6500);
+  if (qs.get('cadastro') === 'pendente') M.toast('Cadastro enviado. O SuperAdmin precisa liberar seu acesso antes do primeiro login.', 'success', 8000);
 
   passwordToggle?.addEventListener('click', () => {
     const show = passwordInput.type === 'password';
@@ -46,7 +47,8 @@
     try {
       await M.routeAuthenticatedUser(user);
     } catch (error) {
-      M.toast(error.message, 'error', 6500);
+      await auth.signOut().catch(() => {});
+      M.toast(error.message, error.code === 'mercador/pending' ? 'warning' : 'error', 7500);
     }
   });
 
@@ -76,7 +78,8 @@
         'auth/user-disabled': 'Esta conta foi desativada no Firebase Authentication.',
         'auth/too-many-requests': 'Muitas tentativas. Aguarde alguns minutos e tente novamente.'
       };
-      M.toast(messages[error.code] || error.message || 'Não foi possível entrar.', 'error', 6500);
+      if(String(error.code||'').startsWith('mercador/')) await auth.signOut().catch(() => {});
+      M.toast(messages[error.code] || error.message || 'Não foi possível entrar.', error.code === 'mercador/pending' ? 'warning' : 'error', 7000);
     } finally {
       M.setBusy(loginBtn, false);
     }

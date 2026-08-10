@@ -39,9 +39,17 @@
       return { uid:user.uid, ...current, ...patch, role:'superadmin', status:'active' };
     }
 
-    if (!snap.exists()) throw new Error('Seu login existe no Authentication, mas o perfil da plataforma ainda não foi criado.');
+    if (!snap.exists()) { const error=new Error('Seu login existe no Authentication, mas o perfil da plataforma ainda não foi criado.'); error.code='mercador/profile-missing'; throw error; }
     const profile = snap.val();
-    if (profile.status !== 'active') throw new Error('Seu acesso está bloqueado. Procure o administrador da plataforma.');
+    if (profile.status !== 'active') {
+      const messages={
+        pending:'Seu cadastro foi recebido e está aguardando liberação do SuperAdmin.',
+        blocked:'Seu acesso está bloqueado. Procure o administrador da plataforma.',
+        rejected:'Seu cadastro não foi aprovado. Entre em contato com a administração.',
+        deleted:'Este cadastro foi excluído da plataforma. Entre em contato com a administração.'
+      };
+      const error=new Error(messages[profile.status] || 'Seu acesso não está liberado.'); error.code=`mercador/${profile.status || 'inactive'}`; error.profileStatus=profile.status; throw error;
+    }
     if (shouldTouchLogin(user.uid, profile.lastLoginAt)) ref.child('lastLoginAt').set(serverTimestamp).catch(() => {});
     return { uid:user.uid, ...profile };
   };

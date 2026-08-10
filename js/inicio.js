@@ -9,6 +9,17 @@
   };
   const state={user:null,profile:null,items:[],radiusKm:5,loadingOffers:false};
   const normalizeItem=(raw,id)=>({id,nome:raw?.nome||raw?.name||'',status:raw?.status||'faltando',quantidade:Number(raw?.quantidade??raw?.quantity??1),preco:Number(raw?.preco??raw?.price??0)});
+
+  function loadCachedList(uid){
+    try{
+      const raw=localStorage.getItem(`mercadorIA:list-cache:${uid}`);
+      const parsed=raw?JSON.parse(raw):null;
+      if(!parsed||!Array.isArray(parsed.items))return false;
+      state.items=parsed.items.map((item)=>normalizeItem(item,item.id));
+      renderStats();
+      return true;
+    }catch(_){return false;}
+  }
   function reveal(){els.boot.hidden=true;els.shell.hidden=false;}
   function firstName(name){return String(name||'').trim().split(/\s+/)[0]||'';}
   function renderStats(){
@@ -55,8 +66,11 @@
       const profile=await M.ensureAuthenticatedProfile(user);if(!profile||profile.status!=='active')throw new Error('Sua conta está bloqueada.');
       if(['superadmin','admin'].includes(profile.role)){location.replace('./admin.html');return;}
       state.profile=profile;els.welcome.textContent=`Olá${firstName(profile.name)?`, ${firstName(profile.name)}`:''}`;
+      // O painel aparece primeiro com o cache da lista; a confirmação do Firebase vem por trás.
+      loadCachedList(user.uid);
+      reveal();
       const [listSnap,radiusSnap]=await Promise.all([db.ref(`shopping_lists/${user.uid}`).once('value'),db.ref(`user_settings/${user.uid}/radiusKm`).once('value')]);
-      const raw=listSnap.val()||{};state.items=Object.entries(raw).map(([id,value])=>normalizeItem(value,id));state.radiusKm=Number(radiusSnap.val())||5;els.radius.textContent=`${state.radiusKm} km`;renderStats();reveal();
+      const raw=listSnap.val()||{};state.items=Object.entries(raw).map(([id,value])=>normalizeItem(value,id));state.radiusKm=Number(radiusSnap.val())||5;els.radius.textContent=`${state.radiusKm} km`;renderStats();
       if(navigator.permissions?.query){try{const permission=await navigator.permissions.query({name:'geolocation'});if(permission.state==='granted')loadOffers();}catch(_){}}
     }catch(error){els.boot.innerHTML=`<div class="error-box">${M.escapeHtml(error.message||'Não foi possível abrir seu painel.')}<br><br><a href="./index.html">Voltar ao login</a></div>`;}
   }

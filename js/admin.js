@@ -13,6 +13,15 @@
   };
   const getMarket = (id) => state.markets[id] || null;
   const getUnit = (id) => state.units[id] || null;
+  const digitsOnly = (value) => String(value || '').replace(/\D/g, '');
+  const whatsappHref = (value) => {
+    let digits = digitsOnly(value);
+    if (!digits) return '';
+    if ((digits.length === 10 || digits.length === 11) && !digits.startsWith('55')) digits = `55${digits}`;
+    return `https://wa.me/${digits}`;
+  };
+  const userStatusLabel = (status) => ({pending:'pendente',active:'ativo',blocked:'bloqueado',rejected:'rejeitado',deleted:'excluído'}[status] || status || '—');
+  const userStatusClass = (status) => status === 'active' ? 'ok' : status === 'pending' ? 'warn' : status === 'deleted' ? 'danger' : 'danger';
 
   const geoUnitRecord = (unit, marketOverride = null) => {
     if (!unit || unit.active !== true || !unit.marketId) return null;
@@ -127,24 +136,56 @@
 
     const unverified = promotions.filter((x) => x.active === true && x.verified !== true).length;
     const expired = promotions.filter((x) => x.endAt && Number(x.endAt) < Date.now()).length;
+    const pendingUsers = users.filter((x) => x.status === 'pending').length;
     byId('qualitySummary').innerHTML = `
+      <div class="entity-card"><div class="entity-top"><div><div class="entity-title">Cadastros aguardando liberação</div><div class="small muted">Usuários do cadastro público ainda sem acesso.</div></div><span class="badge ${pendingUsers ? 'warn' : 'ok'}">${pendingUsers}</span></div></div>
       <div class="entity-card"><div class="entity-top"><div><div class="entity-title">Promoções aguardando conferência</div><div class="small muted">Não aparecem ao consumidor.</div></div><span class="badge ${unverified ? 'warn' : 'ok'}">${unverified}</span></div></div>
       <div class="entity-card"><div class="entity-top"><div><div class="entity-title">Promoções vencidas</div><div class="small muted">Mantidas para histórico administrativo.</div></div><span class="badge info">${expired}</span></div></div>`;
   }
 
   function renderUsers() {
     const q = M.normalizeText(byId('userSearch').value);
-    const users = entries(state.users).filter((u) => !q || M.normalizeText(`${u.name} ${u.email} ${u.role}`).includes(q)).sort((a,b) => String(a.name || a.email).localeCompare(String(b.name || b.email)));
+    const filter = byId('userStatusFilter')?.value || 'all';
+    const allUsers = entries(state.users);
+    const pendingCount = allUsers.filter((u) => u.status === 'pending').length;
+    const pendingBanner = byId('userPendingBanner');
+    if (pendingBanner) pendingBanner.hidden = pendingCount === 0;
+    if (byId('userPendingCount')) byId('userPendingCount').textContent = pendingCount;
+
+    const users = allUsers
+      .filter((u) => filter === 'all' ? u.status !== 'deleted' : u.status === filter)
+      .filter((u) => !q || M.normalizeText(`${u.name} ${u.email} ${u.contactEmail} ${u.phone} ${u.role} ${u.status} ${u.notes}`).includes(q))
+      .sort((a,b) => {
+        const order={pending:0,active:1,blocked:2,rejected:3,deleted:4};
+        const statusDiff=(order[a.status]??9)-(order[b.status]??9);
+        return statusDiff || String(a.name || a.email).localeCompare(String(b.name || b.email));
+      });
     byId('userCountBadge').textContent = `${users.length} usuário${users.length === 1 ? '' : 's'}`;
     byId('usersList').innerHTML = users.length ? users.map((u) => {
       const isMaster = u.id === M.MASTER_UID;
+      const isDeleted = u.status === 'deleted';
       const roleClass = ['superadmin','admin'].includes(u.role) ? 'warn' : 'info';
+      const phoneLink=whatsappHref(u.phone);
+      const contactEmail=u.contactEmail || u.email || '';
+      let actions='';
+      if(!isMaster && !isDeleted){
+        const primary = u.status === 'pending' || u.status === 'rejected'
+          ? `<button type="button" class="btn btn-primary btn-sm" data-user-status="active" data-user-id="${u.id}">Aprovar</button>`
+          : u.status === 'active'
+            ? `<button type="button" class="btn btn-danger btn-sm" data-user-status="blocked" data-user-id="${u.id}">Bloquear</button>`
+            : `<button type="button" class="btn btn-secondary btn-sm" data-user-status="active" data-user-id="${u.id}">Ativar</button>`;
+        const reject = u.status === 'pending' ? `<button type="button" class="btn btn-secondary btn-sm" data-user-status="rejected" data-user-id="${u.id}">Rejeitar</button>` : '';
+        const deleteBtn = state.profile?.role === 'superadmin' && u.role === 'user' ? `<button type="button" class="btn btn-danger btn-sm" data-user-delete="${u.id}">Excluir</button>` : '';
+        actions=`<button type="button" class="btn btn-secondary btn-sm" data-user-edit="${u.id}">Editar</button>${primary}${reject}${deleteBtn}`;
+      }
       return `<article class="entity-card">
         <div class="entity-top">
           <div><div class="entity-title">${M.escapeHtml(u.name || 'Sem nome')}</div><div class="small muted">${M.escapeHtml(u.email || '')}</div>
-            <div class="entity-meta"><span class="badge ${roleClass}">${M.escapeHtml(u.role || 'user')}</span><span class="badge ${u.status === 'active' ? 'ok' : 'danger'}">${u.status === 'active' ? 'ativo' : 'bloqueado'}</span>${isMaster ? '<span class="badge ok">MASTER</span>' : ''}<span class="badge">UID ${M.escapeHtml(u.id.slice(0,8))}…</span></div>
+            <div class="entity-meta"><span class="badge ${roleClass}">${M.escapeHtml(u.role || 'user')}</span><span class="badge ${userStatusClass(u.status)}">${M.escapeHtml(userStatusLabel(u.status))}</span>${isMaster ? '<span class="badge ok">MASTER</span>' : ''}<span class="badge">UID ${M.escapeHtml(u.id.slice(0,8))}…</span></div>
+            <div class="user-contact-line">${phoneLink ? `<a href="${M.escapeHtml(phoneLink)}" target="_blank" rel="noopener">💬 ${M.escapeHtml(u.phone)}</a>` : '<span class="small muted">📱 sem telefone</span>'}${contactEmail ? `<a href="mailto:${M.escapeHtml(contactEmail)}">✉ ${M.escapeHtml(contactEmail)}</a>` : ''}</div>
+            ${u.notes ? `<div class="user-note">${M.escapeHtml(u.notes)}</div>` : ''}
           </div>
-          <div class="entity-actions">${isMaster ? '' : `<button class="btn btn-sm ${u.status === 'active' ? 'btn-danger' : 'btn-secondary'}" data-user-toggle="${u.id}">${u.status === 'active' ? 'Bloquear' : 'Ativar'}</button>`}</div>
+          <div class="entity-actions user-actions">${actions}</div>
         </div>
       </article>`;
     }).join('') : '<div class="empty">Nenhum usuário encontrado.</div>';
@@ -269,6 +310,9 @@
     const email = f.elements.email.value.trim().toLowerCase();
     const password = f.elements.password.value;
     const role = f.elements.role.value;
+    const phone = f.elements.phone.value.trim();
+    const contactEmail = f.elements.contactEmail.value.trim().toLowerCase() || email;
+    const notes = f.elements.notes.value.trim();
     if (role === 'admin' && state.profile.role !== 'superadmin') { M.toast('Somente SuperAdmin pode criar outro administrador.', 'error'); return; }
     M.setBusy(btn, true, 'Criando...');
     try {
@@ -278,14 +322,54 @@
       const credential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
       const uid = credential.user.uid;
       await secondaryAuth.signOut();
-      await db.ref(`users/${uid}`).set({ name, email, role, status: 'active', createdAt: serverTimestamp, createdBy: state.user.uid, updatedAt: serverTimestamp });
+      await db.ref(`users/${uid}`).set({ name, email, phone, contactEmail, notes, role, status: 'active', registrationSource:'admin', approvedAt:serverTimestamp, approvedBy:state.user.uid, createdAt: serverTimestamp, createdBy: state.user.uid, updatedAt: serverTimestamp });
       await db.ref(`user_settings/${uid}`).set({ radiusKm: 5, updatedAt: serverTimestamp });
-      await audit('user_created', 'user', uid, { email, role });
+      await audit('user_created', 'user', uid, { email, role, phone });
       f.reset(); M.closeModal('userModal'); M.toast('Usuário criado com sucesso.', 'success');
     } catch (error) {
       const msg = error.code === 'auth/email-already-in-use' ? 'Esse e-mail já está cadastrado no Firebase Authentication.' : (error.message || 'Falha ao criar usuário.');
       M.toast(msg, 'error', 7000);
     } finally { M.setBusy(btn, false); }
+  }
+
+  function openUserEditModal(id, trigger) {
+    const user=state.users[id]; if(!user) { M.toast('Usuário não encontrado.','error'); return; }
+    if(id===M.MASTER_UID) { M.toast('O perfil MASTER é protegido.','warning'); return; }
+    const f=byId('userEditForm');
+    f.elements.id.value=id; f.elements.name.value=user.name||''; f.elements.email.value=user.email||'';
+    f.elements.phone.value=user.phone||''; f.elements.contactEmail.value=user.contactEmail||user.email||'';
+    f.elements.role.value=['admin','user'].includes(user.role)?user.role:'user'; f.elements.status.value=['pending','active','blocked','rejected'].includes(user.status)?user.status:'blocked';
+    f.elements.notes.value=user.notes||'';
+    if(state.profile?.role!=='superadmin') f.elements.role.disabled=true; else f.elements.role.disabled=false;
+    M.openModal('userEditModal',{trigger});
+  }
+
+  async function saveUserEdit(event) {
+    event.preventDefault(); const f=event.currentTarget; const id=f.elements.id.value; const current=state.users[id];
+    if(!current || id===M.MASTER_UID) return;
+    const role=f.elements.role.disabled ? current.role : f.elements.role.value;
+    const status=f.elements.status.value;
+    if((role!==current.role || status!==current.status) && state.profile?.role!=='superadmin'){M.toast('Somente o SuperAdmin pode alterar perfil ou status.','error');return;}
+    const patch={name:f.elements.name.value.trim(),phone:f.elements.phone.value.trim(),contactEmail:f.elements.contactEmail.value.trim().toLowerCase()||current.email||'',notes:f.elements.notes.value.trim(),role,status,updatedAt:serverTimestamp,updatedBy:state.user.uid};
+    if(status==='active' && current.status!=='active'){patch.approvedAt=serverTimestamp;patch.approvedBy=state.user.uid;}
+    const updates={ [`users/${id}`]:{...current,...patch} };
+    if(status==='active' && current.registrationSource==='public' && !current.approvedAt) updates[`user_settings/${id}`]={ radiusKm:5, updatedAt:serverTimestamp };
+    const btn=byId('userEditSubmit'); M.setBusy(btn,true,'Salvando...');
+    try{await db.ref().update(updates);await audit('user_updated','user',id,{fields:['name','phone','contactEmail','notes','role','status'],status,role});M.closeModal('userEditModal');M.toast('Usuário atualizado.','success');}
+    catch(error){M.toast(error.message||'Não foi possível atualizar o usuário.','error',7000);}
+    finally{M.setBusy(btn,false);}
+  }
+
+  async function setUserStatus(id,status) {
+    const current=state.users[id]; if(!current||id===M.MASTER_UID)return;
+    if(state.profile?.role!=='superadmin'){M.toast('Somente o SuperAdmin pode aprovar, rejeitar ou alterar o acesso.','error');return;}
+    const labels={active:'aprovar/ativar',blocked:'bloquear',rejected:'rejeitar'};
+    if(!confirm(`Confirma ${labels[status]||'alterar'} o acesso de “${current.name||current.email}”?`))return;
+    const updates={ [`users/${id}/status`]:status,[`users/${id}/updatedAt`]:serverTimestamp,[`users/${id}/updatedBy`]:state.user.uid };
+    if(status==='active'){updates[`users/${id}/approvedAt`]=serverTimestamp;updates[`users/${id}/approvedBy`]=state.user.uid;if(current.registrationSource==='public'&&!current.approvedAt)updates[`user_settings/${id}`]={radiusKm:5,updatedAt:serverTimestamp};}
+    if(status==='rejected'){updates[`users/${id}/rejectedAt`]=serverTimestamp;updates[`users/${id}/rejectedBy`]=state.user.uid;}
+    try{await db.ref().update(updates);await audit('user_status_changed','user',id,{from:current.status,to:status});M.toast(`Usuário ${userStatusLabel(status)}.`,'success');}
+    catch(error){M.toast(error.message||'Não foi possível alterar o acesso.','error',7000);}
   }
 
   async function saveMarket(event) {
@@ -1035,6 +1119,10 @@
   const deleteState = { type: '', id: '', name: '', plan: null, trigger: null };
 
   function buildDeletePlan(type, id) {
+    if (type === 'user') {
+      const user=state.users[id]; if(!user || id===M.MASTER_UID) return null;
+      return { type, id, name:user.name || user.email || id, user };
+    }
     if (type === 'market') {
       const market = state.markets[id];
       if (!market) return null;
@@ -1059,6 +1147,7 @@
   }
 
   function deletePlanHtml(plan) {
+    if (plan.type === 'user') return `<div class="delete-impact"><div><strong>1</strong><span>perfil</span></div><div><strong>✓</strong><span>lista e relatórios</span></div></div><p>Serão removidos a lista, configurações e relatórios deste usuário. O perfil ficará marcado como <strong>excluído</strong> para negar o acesso e preservar a rastreabilidade. A conta do Firebase Authentication não pode ser apagada por outro usuário diretamente do navegador; isso exige o backend administrativo.</p>`;
     if (plan.type === 'market') {
       return `<div class="delete-impact"><div><strong>${plan.units.length}</strong><span>unidade${plan.units.length === 1 ? '' : 's'}</span></div><div><strong>${plan.promotions.length}</strong><span>promoç${plan.promotions.length === 1 ? 'ão' : 'ões'}</span></div><div><strong>${plan.inbox.length}</strong><span>registro${plan.inbox.length === 1 ? '' : 's'} de inbox</span></div></div><p>As <strong>unidades e promoções vinculadas serão excluídas definitivamente</strong>. Registros de Inbox serão preservados como histórico, mas perderão o vínculo ativo com o mercado.</p>`;
     }
@@ -1085,10 +1174,11 @@
     Object.assign(deleteState, { type, id, name: plan.name, plan, trigger });
     byId('deleteEntityName').textContent = plan.name;
     byId('deleteEntityImpact').innerHTML = deletePlanHtml(plan);
-    const label = type === 'market' ? 'mercado' : (type === 'unit' ? 'unidade' : 'promoção');
-    byId('deleteEntityTitle').textContent = `Excluir ${label} definitivamente`;
+    const label = type === 'user' ? 'usuário' : (type === 'market' ? 'mercado' : (type === 'unit' ? 'unidade' : 'promoção'));
+    byId('deleteEntityTitle').textContent = type === 'user' ? 'Excluir acesso e dados do usuário' : `Excluir ${label} definitivamente`;
     byId('deleteEntityConfirmLabel').textContent = `Digite exatamente “${plan.name}” para confirmar:`;
     byId('deleteEntityConfirmText').value = '';
+    byId('deleteEntityConfirmBtn').textContent = type === 'user' ? 'Excluir acesso e dados' : 'Excluir definitivamente';
     byId('deleteEntityConfirmBtn').disabled = true;
     M.openModal('deleteEntityModal', { trigger });
     setTimeout(() => byId('deleteEntityConfirmText')?.focus({ preventScroll: true }), 120);
@@ -1109,7 +1199,12 @@
     try {
       const updates = {};
       const details = { name: plan.name };
-      if (plan.type === 'market') {
+      if (plan.type === 'user') {
+        if(plan.user.role!=='user') throw new Error('Exclusão pelo navegador está limitada a usuários consumidores. Para administradores, use Bloquear.');
+        updates[`shopping_lists/${plan.id}`]=null; updates[`user_settings/${plan.id}`]=null; updates[`purchase_reports/${plan.id}`]=null;
+        updates[`users/${plan.id}`]={ name:'Cadastro excluído', email:plan.user.email||'', contactEmail:'', phone:'', notes:'', role:'user', status:'deleted', registrationSource:plan.user.registrationSource||'unknown', createdAt:plan.user.createdAt||serverTimestamp, deletedAt:serverTimestamp, deletedBy:state.user.uid, updatedAt:serverTimestamp };
+        details.previousStatus=plan.user.status; details.email=plan.user.email||''; details.appDataRemoved=true; details.authAccountRemoved=false;
+      } else if (plan.type === 'market') {
         updates[`markets/${plan.id}`] = null;
         plan.units.forEach((u) => { updates[`market_units/${u.id}`] = null; updates[`geo_catalog/${u.id}`] = null; });
         plan.promotions.forEach((p) => { updates[`promotions/${p.id}`] = null; if (p.unitId) updates[`promotion_live/${p.unitId}/${p.id}`] = null; });
@@ -1133,10 +1228,10 @@
         details.price = plan.promotion.price;
       }
       await db.ref().update(updates);
-      const action = plan.type === 'market' ? 'market_deleted_permanently' : (plan.type === 'unit' ? 'unit_deleted_permanently' : 'promotion_deleted_permanently');
+      const action = plan.type === 'user' ? 'user_app_data_deleted' : (plan.type === 'market' ? 'market_deleted_permanently' : (plan.type === 'unit' ? 'unit_deleted_permanently' : 'promotion_deleted_permanently'));
       await audit(action, plan.type === 'unit' ? 'market_unit' : plan.type, plan.id, details);
       M.closeModal('deleteEntityModal');
-      M.toast(`${plan.type === 'market' ? 'Mercado' : (plan.type === 'unit' ? 'Unidade' : 'Promoção')} excluído definitivamente.`, 'success', 7000);
+      M.toast(`${plan.type === 'user' ? 'Acesso e dados do usuário removidos' : (plan.type === 'market' ? 'Mercado excluído definitivamente' : (plan.type === 'unit' ? 'Unidade excluída definitivamente' : 'Promoção excluída definitivamente'))}.`, 'success', 7000);
     } catch (error) {
       console.error('[Mercador IA] Falha na exclusão definitiva:', error);
       M.toast(error.message || 'Não foi possível excluir o registro.', 'error', 8000);
@@ -1150,6 +1245,9 @@
     byId('deleteEntityForm')?.addEventListener('submit', deleteEntityPermanently);
     byId('deleteEntityConfirmText')?.addEventListener('input', updateDeleteConfirmState);
     byId('userForm').addEventListener('submit', createUser);
+    byId('userEditForm')?.addEventListener('submit', saveUserEdit);
+    byId('userStatusFilter')?.addEventListener('change', renderUsers);
+    byId('showPendingUsersBtn')?.addEventListener('click',()=>{byId('userStatusFilter').value='pending';renderUsers();navigate('users');});
     byId('marketForm').addEventListener('submit', (e)=>saveMarket(e).catch((er)=>M.toast(er.message,'error')));
     byId('unitForm').addEventListener('submit', (e)=>saveUnit(e).catch((er)=>M.toast(er.message,'error')));
     byId('promotionForm').addEventListener('submit', (e)=>savePromotion(e).catch((er)=>M.toast(er.message,'error')));
@@ -1179,10 +1277,9 @@
       if(t.dataset.pdfReview) { event.preventDefault(); event.stopPropagation(); await openPdfReview(t.dataset.pdfReview, t); return; }
       if(t.dataset.pdfIgnoreQuick) { event.preventDefault(); event.stopPropagation(); await discardPdfCandidateById(t.dataset.pdfIgnoreQuick); return; }
       if(t.dataset.pdfRestore) { event.preventDefault(); event.stopPropagation(); restorePdfCandidate(t.dataset.pdfRestore); return; }
-      if(t.dataset.userToggle){
-        const id=t.dataset.userToggle; const x=state.users[id];
-        if(x){ const next=x.status==='active'?'blocked':'active'; await db.ref(`users/${id}`).update({status:next,updatedAt:serverTimestamp}); await audit('user_status_changed','user',id,{status:next}); M.toast(`Usuário ${next==='active'?'ativado':'bloqueado'}.`,'success'); }
-      }
+      if(t.dataset.userEdit){ event.preventDefault(); event.stopPropagation(); openUserEditModal(t.dataset.userEdit,t); return; }
+      if(t.dataset.userStatus){ event.preventDefault(); event.stopPropagation(); await setUserStatus(t.dataset.userId,t.dataset.userStatus); return; }
+      if(t.dataset.userDelete){ event.preventDefault(); event.stopPropagation(); openDeleteEntityModal('user',t.dataset.userDelete,t); return; }
       if(t.dataset.marketEdit) { event.preventDefault(); event.stopPropagation(); populateMarketForm(t.dataset.marketEdit, t); return; }
       if(t.dataset.unitEdit) { event.preventDefault(); event.stopPropagation(); populateUnitForm(t.dataset.unitEdit, t); return; }
       if(t.dataset.promoEdit) { event.preventDefault(); event.stopPropagation(); populatePromotionForm(t.dataset.promoEdit, t); return; }
