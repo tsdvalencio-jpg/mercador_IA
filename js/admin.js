@@ -280,17 +280,64 @@
 
   function confidenceLabel(value) {
     const n = Math.round(Number(value || 0) * 100);
-    if (n >= 86) return { n, label:'alta', klass:'ok' };
-    if (n >= 70) return { n, label:'média', klass:'info' };
-    return { n, label:'baixa', klass:'warn' };
+    if (n >= 98) return { n, label:'muito alta', klass:'ok' };
+    if (n >= 90) return { n, label:'alta', klass:'info' };
+    if (n >= 75) return { n, label:'média', klass:'warn' };
+    return { n, label:'baixa', klass:'danger' };
+  }
+
+  const PDF_RISK_LABELS = {
+    association_disagreement: 'associação produto↔preço conflitante',
+    single_association_pass: 'apenas uma associação espacial',
+    short_product_name: 'descrição curta',
+    missing_validity: 'validade não identificada',
+    too_many_prices: 'mais de dois preços no mesmo bloco',
+    ambiguous_price_kind: 'tipo do preço ambíguo',
+    invalid_price: 'preço inválido',
+    invalid_previous_price: 'preço anterior inconsistente',
+    header_contamination: 'texto de cabeçalho misturado',
+    price_inside_product_text: 'preço misturado ao nome',
+    overlong_product_text: 'descrição excessivamente longa',
+    missing_club_name: 'programa/clube sem nome'
+  };
+
+  function automationThreshold() {
+    const raw = Number(byId('pdfAutomationMode')?.value || .98);
+    return Number.isFinite(raw) ? Math.max(.97, Math.min(.99, raw)) : .98;
+  }
+
+  function classifyPdfCandidate(candidate, threshold = automationThreshold()) {
+    if (candidate.published) return 'published';
+    if (candidate.ignored) return 'ignored';
+    if (candidate.verified && candidate.verificationMode === 'manual') return 'manual';
+    const risks = new Set(candidate.riskFlags || []);
+    candidate.riskFlags = [...risks];
+    const hardBlock = ['association_disagreement','missing_validity','too_many_prices','ambiguous_price_kind','invalid_price','invalid_previous_price','header_contamination','price_inside_product_text']
+      .some((x) => risks.has(x));
+    if (!hardBlock && candidate.automationSafe === true && Number(candidate.confidence || 0) >= threshold) return 'auto';
+    if (!hardBlock && Number(candidate.confidence || 0) >= .90) return 'supervised';
+    return 'review';
+  }
+
+  function refreshPdfClassifications() {
+    const imp = getPdfImport();
+    if (!imp) return;
+    const threshold = imp.threshold || automationThreshold();
+    imp.threshold = threshold;
+    imp.candidates.forEach((candidate) => {
+      if (!candidate.published && !candidate.ignored && !(candidate.verified && candidate.verificationMode === 'manual')) {
+        candidate.automationDecision = classifyPdfCandidate(candidate, threshold);
+      }
+    });
   }
 
   function pdfCandidateStatus(candidate) {
-    if (candidate.published) return { label:'publicado', klass:'info' };
+    if (candidate.published) return { label:candidate.verificationMode === 'automatic' ? 'publicado automático' : 'publicado', klass:'info' };
     if (candidate.ignored) return { label:'ignorado', klass:'danger' };
-    if (candidate.verified) return { label:'conferido', klass:'ok' };
-    if (candidate.reviewed) return { label:'revisado - falta confirmar', klass:'warn' };
-    return { label:'a revisar', klass:'warn' };
+    if (candidate.verified && candidate.verificationMode === 'manual') return { label:'conferido manualmente', klass:'ok' };
+    if (candidate.automationDecision === 'auto') return { label:'automático seguro', klass:'ok' };
+    if (candidate.automationDecision === 'supervised') return { label:'supervisionado', klass:'warn' };
+    return { label:'revisão necessária', klass:'danger' };
   }
 
   function renderPdfImport() {
@@ -300,34 +347,45 @@
       if (workspace) workspace.hidden = true;
       return;
     }
+    refreshPdfClassifications();
     workspace.hidden = false;
     const candidates = imp.candidates || [];
-    byId('pdfKpiPages').textContent = imp.result.numPages || 0;
+    const autoPending = candidates.filter((x) => !x.published && !x.ignored && x.automationDecision === 'auto').length;
+    const manualReady = candidates.filter((x) => x.verified && x.verificationMode === 'manual' && !x.published && !x.ignored).length;
+    const reviewPending = candidates.filter((x) => !x.published && !x.ignored && x.automationDecision !== 'auto' && !(x.verified && x.verificationMode === 'manual')).length;
+    const published = candidates.filter((x) => x.published).length;
     byId('pdfKpiCandidates').textContent = candidates.length;
-    byId('pdfKpiVerified').textContent = candidates.filter((x) => x.verified && !x.published && !x.ignored).length;
-    byId('pdfKpiPublished').textContent = candidates.filter((x) => x.published).length;
+    byId('pdfKpiPagesFoot').textContent = `${imp.result.numPages || 0} página${imp.result.numPages === 1 ? '' : 's'}`;
+    byId('pdfKpiAuto').textContent = autoPending;
+    byId('pdfKpiReview').textContent = reviewPending;
+    byId('pdfKpiPublished').textContent = published;
 
     const validity = imp.result.validity || {};
     const validityText = validity.startAt && validity.endAt
       ? `${M.formatDateOnly(validity.startAt)} a ${M.formatDateOnly(validity.endAt)}`
       : 'validade não confirmada automaticamente';
-    byId('pdfImportMeta').innerHTML = `Arquivo: <strong>${M.escapeHtml(imp.result.fileName)}</strong> · SHA-256 ${M.escapeHtml((imp.result.hash || '').slice(0,16))}… · ${imp.result.numPages} página${imp.result.numPages === 1 ? '' : 's'} · ${M.escapeHtml(validityText)} · analisado localmente com PDF.js ${M.escapeHtml(imp.result.pdfjsVersion || '')}`;
+    const thresholdPct = Math.round((imp.threshold || .98) * 100);
+    byId('pdfImportMeta').innerHTML = `<div class="pdf-automation-summary">Arquivo: <strong>${M.escapeHtml(imp.result.fileName)}</strong> · ${imp.result.numPages} página${imp.result.numPages === 1 ? '' : 's'} · ${M.escapeHtml(validityText)} · SHA-256 ${M.escapeHtml((imp.result.hash || '').slice(0,16))}…<br><strong>${autoPending}</strong> automáticos aguardando publicação · <strong>${reviewPending}</strong> exceções para revisão · limite automático <strong>${thresholdPct}%</strong> · motor ${M.escapeHtml(imp.result.engineVersion || '2.0.0')} / PDF.js ${M.escapeHtml(imp.result.pdfjsVersion || '')}</div>`;
 
     const q = M.normalizeText(byId('pdfCandidateSearch')?.value || '');
     const filter = byId('pdfCandidateFilter')?.value || 'all';
     let list = candidates.filter((x) => !q || M.normalizeText(`${x.productName} ${x.category} ${x.brand} ${x.packageText}`).includes(q));
-    if (filter === 'pending') list = list.filter((x) => !x.verified && !x.published && !x.ignored);
-    if (filter === 'verified') list = list.filter((x) => x.verified && !x.published && !x.ignored);
+    if (filter === 'auto') list = list.filter((x) => !x.published && !x.ignored && x.automationDecision === 'auto');
+    if (filter === 'pending') list = list.filter((x) => !x.published && !x.ignored && x.automationDecision !== 'auto' && !(x.verified && x.verificationMode === 'manual'));
+    if (filter === 'verified') list = list.filter((x) => x.verified && x.verificationMode === 'manual' && !x.published && !x.ignored);
     if (filter === 'published') list = list.filter((x) => x.published);
     if (filter === 'ignored') list = list.filter((x) => x.ignored);
-    if (filter === 'low') list = list.filter((x) => Number(x.confidence || 0) < .70 && !x.ignored);
+    if (filter === 'low') list = list.filter((x) => Number(x.confidence || 0) < .90 && !x.ignored);
 
     byId('pdfCandidatesList').innerHTML = list.length ? list.map((x) => {
       const conf = confidenceLabel(x.confidence);
       const status = pdfCandidateStatus(x);
       const hasOld = Number(x.previousPrice) > Number(x.price);
       const priceType = x.priceKind === 'club' ? `💳 ${x.clubName || 'Preço Clube'}` : (x.priceKind === 'condition' ? 'Preço com condição' : (x.priceKind === 'review' ? 'tipo de preço a confirmar' : 'preço geral'));
-      return `<article class="entity-card pdf-candidate-card ${x.verified ? 'verified':''} ${x.published ? 'published':''} ${x.ignored ? 'ignored':''}">
+      const decisionClass = x.automationDecision === 'auto' ? 'auto-approved' : (x.automationDecision === 'supervised' ? 'needs-review' : (x.automationDecision === 'review' ? 'blocked-auto' : ''));
+      const riskHtml = (x.riskFlags || []).length ? `<div class="pdf-risk-list">${x.riskFlags.map((r) => `<span class="pdf-risk-chip">⚠ ${M.escapeHtml(PDF_RISK_LABELS[r] || r)}</span>`).join('')}</div>` : '';
+      const evidenceHtml = (x.evidence || []).length ? `<div class="pdf-evidence-list">${x.evidence.slice(0,5).map((e) => `<span class="pdf-evidence-chip">✓ ${M.escapeHtml(e)}</span>`).join('')}</div>` : '';
+      return `<article class="entity-card pdf-candidate-card ${decisionClass} ${x.verified ? 'verified':''} ${x.published ? 'published':''} ${x.ignored ? 'ignored':''}">
         <div class="pdf-candidate-main">
           <div>
             <div class="entity-title">${M.escapeHtml(x.productName)}</div>
@@ -338,28 +396,33 @@
               <span class="badge">${M.escapeHtml(priceType)}</span>
               ${x.detectedPrices?.length > 1 ? `<span class="badge warn">${x.detectedPrices.length} preços detectados</span>`:''}
             </div>
-            ${x.conditions ? `<div class="small muted pdf-source-meta">Condições detectadas/revisadas: ${M.escapeHtml(x.conditions)}</div>`:''}
+            ${evidenceHtml}${riskHtml}
+            ${x.conditions ? `<div class="small muted pdf-source-meta">Condições: ${M.escapeHtml(x.conditions)}</div>`:''}
           </div>
           <div class="pdf-price-stack">
             <span class="pdf-price-main">${M.formatCurrency(x.price)}</span>
             ${hasOld ? `<span class="pdf-price-old">${M.formatCurrency(x.previousPrice)}</span>`:''}
           </div>
         </div>
-        <div class="pdf-confidence ${conf.n < 70 ? 'low':''}">
+        <div class="pdf-confidence ${conf.n < 90 ? 'low':''}">
           <div class="pdf-confidence-track"><span style="width:${conf.n}%"></span></div>
-          <span class="small muted">Página ${x.pageNumber} preservada para conferência visual.</span>
+          <span class="small muted">Associação espacial dupla: ${Math.round(Number(x.associationAgreement || 0) * 100)}%.</span>
         </div>
         <div class="entity-actions" style="margin-top:12px">
-          <button class="btn btn-secondary btn-sm" type="button" data-pdf-review="${M.escapeHtml(x.id)}">${x.published ? 'Ver conferência':'Revisar no encarte'}</button>
+          <button class="btn btn-secondary btn-sm" type="button" data-pdf-review="${M.escapeHtml(x.id)}">${x.published ? 'Ver origem' : (x.automationDecision === 'auto' ? 'Ver evidência' : 'Revisar exceção')}</button>
         </div>
       </article>`;
     }).join('') : '<div class="empty">Nenhum candidato neste filtro.</div>';
 
-    const publishable = candidates.filter((x) => x.verified && !x.published && !x.ignored).length;
     const publishBtn = byId('pdfPublishVerifiedBtn');
     if (publishBtn) {
-      publishBtn.disabled = publishable === 0;
-      publishBtn.textContent = publishable ? `Publicar ${publishable} conferida${publishable === 1 ? '' : 's'}` : 'Publicar conferidos';
+      publishBtn.disabled = manualReady === 0;
+      publishBtn.textContent = manualReady ? `Publicar ${manualReady} revisada${manualReady === 1 ? '' : 's'}` : 'Publicar revisados';
+    }
+    const autoBtn = byId('pdfPublishAutoBtn');
+    if (autoBtn) {
+      autoBtn.disabled = autoPending === 0;
+      autoBtn.textContent = autoPending ? `Publicar ${autoPending} automática${autoPending === 1 ? '' : 's'}` : 'Publicar automáticos seguros';
     }
   }
 
@@ -375,14 +438,16 @@
     if (!file) { M.toast('Selecione o PDF oficial do encarte.', 'warning'); return; }
 
     const btn = byId('pdfImportAnalyzeBtn');
-    M.setBusy(btn, true, 'Analisando PDF...');
-    setPdfProgress(2, 'Carregando o motor de PDF...');
+    M.setBusy(btn, true, 'Analisando e conferindo...');
+    setPdfProgress(2, 'Carregando o motor automático...');
     try {
       const lowerPriceIsClub = byId('pdfImportLowerIsClub').checked;
       const clubName = byId('pdfImportClubName').value.trim();
+      const threshold = automationThreshold();
       const result = await importer.analyzeFile(file, { lowerPriceIsClub, clubName }, (progress) => {
-        setPdfProgress(progress.percent, `Analisando página ${progress.pageNumber} de ${progress.numPages}...`);
+        setPdfProgress(progress.percent, `Conferindo página ${progress.pageNumber} de ${progress.numPages}...`);
       });
+      result.engineVersion = importer.ENGINE_VERSION || '2.0.0';
       if (result.validity?.startAt && !byId('pdfImportStartAt').value) byId('pdfImportStartAt').value = M.toLocalDateTimeInput(result.validity.startAt);
       if (result.validity?.endAt && !byId('pdfImportEndAt').value) byId('pdfImportEndAt').value = M.toLocalDateTimeInput(result.validity.endAt);
 
@@ -393,13 +458,25 @@
         unitId,
         sourceUrl: byId('pdfImportSourceUrl').value.trim(),
         lowerPriceIsClub,
-        clubName
+        clubName,
+        threshold
       };
-      setPdfProgress(100, `${result.candidates.length} candidatos encontrados. Revise cada preço antes de publicar.`);
+      refreshPdfClassifications();
+      const autoCount = state.pdfImport.candidates.filter((x) => x.automationDecision === 'auto').length;
+      const reviewCount = state.pdfImport.candidates.filter((x) => x.automationDecision !== 'auto').length;
+      setPdfProgress(100, `${result.candidates.length} ofertas detectadas: ${autoCount} seguras para automação e ${reviewCount} exceções.`);
       renderPdfImport();
-      await audit('pdf_import_analyzed', 'pdf_import', (result.hash || '').slice(0,20), { fileName:result.fileName, pages:result.numPages, candidates:result.candidates.length, marketId, unitId });
-      if (!result.candidates.length) M.toast('O PDF foi lido, mas nenhum candidato de preço pôde ser associado com segurança. Cadastre manualmente ou use outro encarte.', 'warning', 8000);
-      else M.toast(`PDF analisado: ${result.candidates.length} candidatos. Nenhum foi publicado automaticamente.`, 'success', 6500);
+      await audit('pdf_import_analyzed_v2', 'pdf_import', (result.hash || '').slice(0,20), { fileName:result.fileName, pages:result.numPages, candidates:result.candidates.length, auto:autoCount, review:reviewCount, threshold, marketId, unitId, engineVersion:result.engineVersion });
+      if (!result.candidates.length) {
+        M.toast('O PDF foi lido, mas nenhum bloco de produto/preço foi associado com segurança.', 'warning', 8000);
+      } else if (byId('pdfAutoPublish')?.checked && autoCount) {
+        await publishAutomaticPdfCandidates(true);
+        const remaining = state.pdfImport.candidates.filter((x) => !x.published && !x.ignored && x.automationDecision !== 'auto').length;
+        setPdfProgress(100, `Automação concluída. ${remaining} exceção${remaining === 1 ? '' : 'ões'} aguardando revisão.`);
+        M.toast(`Automação concluída. Revise somente ${remaining} exceção${remaining === 1 ? '' : 'ões'}.`, remaining ? 'info' : 'success', 7000);
+      } else {
+        M.toast(`Análise concluída: ${autoCount} automáticas e ${reviewCount} para supervisão.`, 'success', 6500);
+      }
     } catch (error) {
       console.error(error);
       state.pdfImport = null;
@@ -484,6 +561,8 @@
       startAt,
       endAt,
       verified: f.elements.verified.checked,
+      verificationMode: f.elements.verified.checked ? 'manual' : '',
+      automationDecision: f.elements.verified.checked ? 'manual' : classifyPdfCandidate(candidate, imp.threshold || automationThreshold()),
       reviewed: true,
       ignored: false
     });
@@ -505,77 +584,142 @@
     M.toast('Candidato ignorado. Nada foi gravado como promoção.', 'info');
   }
 
-  async function publishVerifiedPdfCandidates() {
+  function isDuplicatePdfPromotion(candidate, imp) {
+    return Object.values(state.promotions || {}).some((promo) =>
+      promo && promo.sourceHash && promo.sourceHash === imp.result.hash
+      && Number(promo.sourcePage || 0) === Number(candidate.pageNumber || 0)
+      && Math.abs(Number(promo.price || 0) - Number(candidate.price || 0)) < .001
+      && M.normalizeText(promo.productName || '') === M.normalizeText(candidate.productName || '')
+      && promo.unitId === imp.unitId
+    );
+  }
+
+  async function publishPdfCandidateSet(candidates, mode, silent = false) {
     const imp = getPdfImport();
-    if (!imp) return;
-    const candidates = imp.candidates.filter((x) => x.verified && !x.published && !x.ignored);
-    if (!candidates.length) { M.toast('Nenhuma oferta conferida aguardando publicação.', 'warning'); return; }
+    if (!imp || !candidates.length) return { created:0, duplicates:0 };
     const market = getMarket(imp.marketId);
     const unit = getUnit(imp.unitId);
-    if (!market || !unit || unit.marketId !== imp.marketId) { M.toast('Mercado/unidade do encarte não estão mais válidos.', 'error'); return; }
+    if (!market || !unit || unit.marketId !== imp.marketId) throw new Error('Mercado/unidade do encarte não estão mais válidos.');
 
-    const invalid = candidates.find((x) => !x.startAt || !x.endAt || x.endAt <= x.startAt || !Number.isFinite(Number(x.price)) || Number(x.price) <= 0 || x.priceKind === 'review');
-    if (invalid) { M.toast(`Revise novamente "${invalid.productName}". Há dado obrigatório sem confirmação.`, 'warning', 6500); return; }
-
-    const btn = byId('pdfPublishVerifiedBtn');
-    M.setBusy(btn, true, 'Publicando...');
-    try {
-      const updates = {};
-      const created = [];
-      candidates.forEach((candidate) => {
-        const key = db.ref('promotions').push().key;
-        const sourceReference = `PDF ${imp.result.fileName} · pág. ${candidate.pageNumber} · SHA256 ${(imp.result.hash || '').slice(0,16)}${imp.sourceUrl ? ' · fonte oficial informada' : ''}`.slice(0,250);
-        updates[`promotions/${key}`] = {
-          marketId: imp.marketId,
-          unitId: imp.unitId,
-          productName: candidate.productName.slice(0,160),
-          category: candidate.category || M.inferCategory(candidate.productName) || 'outros',
-          brand: (candidate.brand || '').slice(0,80),
-          packageText: (candidate.packageText || '').slice(0,80),
-          price: Number(candidate.price),
-          previousPrice: Number(candidate.previousPrice) > Number(candidate.price) ? Number(candidate.previousPrice) : null,
-          startAt: Number(candidate.startAt),
-          endAt: Number(candidate.endAt),
-          sourceType: 'encarte',
-          sourceReference,
-          sourceUrl: imp.sourceUrl || '',
-          sourceFileName: imp.result.fileName,
-          sourcePage: candidate.pageNumber,
-          sourceHash: imp.result.hash || '',
-          sourceBox: candidate.sourceBox || null,
-          detectedProductName: candidate.detectedProductName || candidate.productName,
-          importConfidence: Number(candidate.confidence || 0),
-          priceKind: candidate.priceKind || 'general',
-          requiresClub: candidate.requiresClub === true,
-          clubName: candidate.requiresClub ? (candidate.clubName || '').slice(0,80) : '',
-          conditions: (candidate.conditions || '').slice(0,250),
-          aliases: '',
-          verified: true,
-          verifiedAt: serverTimestamp,
-          verifiedBy: state.user.uid,
-          active: true,
-          createdAt: serverTimestamp,
-          createdBy: state.user.uid,
-          updatedAt: serverTimestamp,
-          updatedBy: state.user.uid
-        };
-        created.push({ candidate, key });
-      });
-      await db.ref().update(updates);
-      created.forEach(({ candidate }) => { candidate.published = true; });
-      await audit('pdf_import_published', 'pdf_import', (imp.result.hash || '').slice(0,20), {
+    const updates = {};
+    const created = [];
+    let duplicates = 0;
+    candidates.forEach((candidate) => {
+      if (isDuplicatePdfPromotion(candidate, imp)) {
+        candidate.published = true;
+        candidate.duplicate = true;
+        duplicates += 1;
+        return;
+      }
+      const startAt = Number(candidate.startAt || M.toTimestampFromLocalInput(byId('pdfImportStartAt').value) || imp.result.validity?.startAt || 0);
+      const endAt = Number(candidate.endAt || M.toTimestampFromLocalInput(byId('pdfImportEndAt').value) || imp.result.validity?.endAt || 0);
+      if (!startAt || !endAt || endAt <= startAt || !Number.isFinite(Number(candidate.price)) || Number(candidate.price) <= 0 || candidate.priceKind === 'review') {
+        throw new Error(`A oferta "${candidate.productName}" não passou nas travas obrigatórias de publicação.`);
+      }
+      const key = db.ref('promotions').push().key;
+      const sourceReference = `PDF ${imp.result.fileName} · pág. ${candidate.pageNumber} · SHA256 ${(imp.result.hash || '').slice(0,16)}${imp.sourceUrl ? ' · fonte oficial informada' : ''}`.slice(0,250);
+      updates[`promotions/${key}`] = {
+        marketId: imp.marketId,
+        unitId: imp.unitId,
+        productName: candidate.productName.slice(0,160),
+        category: candidate.category || M.inferCategory(candidate.productName) || 'outros',
+        brand: (candidate.brand || '').slice(0,80),
+        packageText: (candidate.packageText || '').slice(0,80),
+        price: Number(candidate.price),
+        previousPrice: Number(candidate.previousPrice) > Number(candidate.price) ? Number(candidate.previousPrice) : null,
+        startAt,
+        endAt,
+        sourceType: 'encarte',
+        sourceReference,
+        sourceUrl: imp.sourceUrl || '',
+        sourceFileName: imp.result.fileName,
+        sourcePage: candidate.pageNumber,
+        sourceHash: imp.result.hash || '',
+        sourceBox: candidate.sourceBox || null,
+        detectedProductName: candidate.detectedProductName || candidate.productName,
+        importConfidence: Number(candidate.confidence || 0),
+        priceKind: candidate.priceKind || 'general',
+        requiresClub: candidate.requiresClub === true,
+        clubName: candidate.requiresClub ? (candidate.clubName || '').slice(0,80) : '',
+        conditions: (candidate.conditions || '').slice(0,250),
+        aliases: '',
+        verified: true,
+        verificationMode: mode === 'automatic' ? 'automatic' : 'manual',
+        automationEngineVersion: imp.result.engineVersion || '2.0.0',
+        automationThreshold: Number(imp.threshold || .98),
+        automationConfidence: Number(candidate.confidence || 0),
+        automationEvidence: (candidate.evidence || []).slice(0,10),
+        automationRiskFlags: (candidate.riskFlags || []).slice(0,10),
+        verifiedAt: serverTimestamp,
+        verifiedBy: state.user.uid,
+        active: true,
+        createdAt: serverTimestamp,
+        createdBy: state.user.uid,
+        updatedAt: serverTimestamp,
+        updatedBy: state.user.uid
+      };
+      created.push({ candidate, key });
+    });
+    if (created.length) await db.ref().update(updates);
+    created.forEach(({ candidate }) => {
+      candidate.published = true;
+      candidate.verified = true;
+      candidate.verificationMode = mode === 'automatic' ? 'automatic' : 'manual';
+    });
+    if (created.length || duplicates) {
+      await audit(mode === 'automatic' ? 'pdf_import_auto_published' : 'pdf_import_manual_published', 'pdf_import', (imp.result.hash || '').slice(0,20), {
         fileName: imp.result.fileName,
-        count: created.length,
+        created: created.length,
+        duplicates,
         marketId: imp.marketId,
         unitId: imp.unitId,
         pages: imp.result.numPages,
-        sourceUrl: imp.sourceUrl || ''
+        sourceUrl: imp.sourceUrl || '',
+        threshold: imp.threshold || .98,
+        engineVersion: imp.result.engineVersion || '2.0.0'
       });
-      renderPdfImport();
-      M.toast(`${created.length} promoção${created.length === 1 ? '' : 'ões'} conferida${created.length === 1 ? '' : 's'} publicada${created.length === 1 ? '' : 's'} no Firebase.`, 'success', 7000);
+    }
+    renderPdfImport();
+    if (!silent) M.toast(`${created.length} promoção${created.length === 1 ? '' : 'ões'} publicada${created.length === 1 ? '' : 's'}${duplicates ? ` · ${duplicates} duplicada${duplicates === 1 ? '' : 's'} ignorada${duplicates === 1 ? '' : 's'}` : ''}.`, 'success', 7000);
+    return { created:created.length, duplicates };
+  }
+
+  async function publishAutomaticPdfCandidates(silent = false) {
+    const imp = getPdfImport();
+    if (!imp) return { created:0, duplicates:0 };
+    refreshPdfClassifications();
+    const candidates = imp.candidates.filter((x) => !x.published && !x.ignored && x.automationDecision === 'auto');
+    if (!candidates.length) {
+      if (!silent) M.toast('Nenhuma oferta atingiu o nível de segurança para publicação automática.', 'warning');
+      return { created:0, duplicates:0 };
+    }
+    const btn = byId('pdfPublishAutoBtn');
+    if (btn && !silent) M.setBusy(btn, true, 'Publicando seguros...');
+    try {
+      return await publishPdfCandidateSet(candidates, 'automatic', silent);
     } catch (error) {
       console.error(error);
-      M.toast(error.message || 'Falha ao publicar promoções do PDF.', 'error', 8000);
+      if (!silent) M.toast(error.message || 'Falha na publicação automática.', 'error', 8000);
+      else throw error;
+      return { created:0, duplicates:0 };
+    } finally {
+      if (btn && !silent) M.setBusy(btn, false);
+      renderPdfImport();
+    }
+  }
+
+  async function publishVerifiedPdfCandidates() {
+    const imp = getPdfImport();
+    if (!imp) return;
+    const candidates = imp.candidates.filter((x) => x.verified && x.verificationMode === 'manual' && !x.published && !x.ignored);
+    if (!candidates.length) { M.toast('Nenhuma exceção conferida aguardando publicação.', 'warning'); return; }
+    const btn = byId('pdfPublishVerifiedBtn');
+    M.setBusy(btn, true, 'Publicando revisados...');
+    try {
+      await publishPdfCandidateSet(candidates, 'manual', false);
+    } catch (error) {
+      console.error(error);
+      M.toast(error.message || 'Falha ao publicar promoções revisadas.', 'error', 8000);
     } finally {
       M.setBusy(btn, false);
       renderPdfImport();
@@ -594,6 +738,8 @@
     byId('pdfImportMarketId').addEventListener('change', refreshPdfImportUnitSelects);
     byId('pdfImportResetBtn').addEventListener('click', resetPdfImport);
     byId('pdfPublishVerifiedBtn').addEventListener('click', publishVerifiedPdfCandidates);
+    byId('pdfPublishAutoBtn').addEventListener('click', () => publishAutomaticPdfCandidates(false));
+    byId('pdfAutomationMode').addEventListener('change', () => { if (state.pdfImport) { state.pdfImport.threshold = automationThreshold(); refreshPdfClassifications(); renderPdfImport(); } });
     byId('pdfIgnoreCandidateBtn').addEventListener('click', ignorePdfCandidate);
     byId('pdfCandidateSearch').addEventListener('input', renderPdfImport);
     byId('pdfCandidateFilter').addEventListener('change', renderPdfImport);

@@ -45,3 +45,19 @@
 @media(max-width:640px){
   .pdf-candidate-main{grid-template-columns:1fr}.pdf-price-stack{text-align:left}.pdf-review-actions{flex-wrap:wrap}.pdf-review-spacer{display:none}.pdf-review-actions .btn{flex:1 1 46%}.pdf-import-actions .btn{flex:1 1 100%}
 }
+
+/* Mercador IA V2.0 - automacao supervisionada de encartes */
+.auto-kpi { border-color:rgba(64,223,135,.30); background:linear-gradient(180deg,rgba(29,93,57,.22),rgba(11,26,18,.96)); }
+.review-kpi { border-color:rgba(255,203,87,.26); background:linear-gradient(180deg,rgba(84,63,16,.20),rgba(24,27,18,.96)); }
+.pdf-candidate-card.auto-approved { border-color:rgba(64,223,135,.38); box-shadow:inset 3px 0 0 rgba(64,223,135,.55); }
+.pdf-candidate-card.needs-review { border-color:rgba(255,203,87,.30); box-shadow:inset 3px 0 0 rgba(255,203,87,.48); }
+.pdf-candidate-card.blocked-auto { border-color:rgba(255,112,112,.24); box-shadow:inset 3px 0 0 rgba(255,112,112,.38); }
+.pdf-risk-list,.pdf-evidence-list { margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
+.pdf-risk-chip,.pdf-evidence-chip { display:inline-flex; align-items:center; min-height:26px; padding:4px 8px; border-radius:999px; font-size:.72rem; font-weight:800; border:1px solid var(--line); }
+.pdf-risk-chip { color:#ffd0cf; background:rgba(136,31,31,.20); border-color:rgba(255,112,112,.25); }
+.pdf-evidence-chip { color:#c9f8da; background:rgba(34,112,67,.18); border-color:rgba(64,223,135,.20); }
+.pdf-automation-summary { margin:12px 0; padding:12px 14px; border:1px solid var(--line); border-radius:14px; background:rgba(255,255,255,.025); line-height:1.5; }
+.pdf-automation-summary strong { color:var(--brand); }
+@media(max-width:640px){
+  #pdfPublishAutoBtn,#pdfPublishVerifiedBtn{flex:1 1 100%;}
+}

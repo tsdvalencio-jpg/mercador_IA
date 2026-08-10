@@ -2,6 +2,7 @@
   'use strict';
 
   const PDFJS_VERSION = '5.7.284';
+  const ENGINE_VERSION = '2.0.0';
   const PDFJS_BASE = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}`;
   let pdfjsPromise = null;
   let activeDocument = null;
@@ -160,6 +161,93 @@
     };
   }
 
+  function findProductForPriceStrict(priceBox, boxes) {
+    const pc = center(priceBox);
+    const nearby = boxes.filter((b) => {
+      if (b === priceBox || b.height > 18) return false;
+      const bc = center(b);
+      const aboveDistance = priceBox.y - (b.y + b.height);
+      if (aboveDistance < -2 || aboveDistance > 88) return false;
+      const horizontalOverlap = overlapX(
+        { x: priceBox.x - 56, y: priceBox.y, width: priceBox.width + 112, height: priceBox.height },
+        b
+      );
+      if (horizontalOverlap <= 0 && Math.abs(bc.x - pc.x) > 48) return false;
+      const upper = b.text.toUpperCase();
+      if (/^(R\$|CADA)$/.test(upper) || /^[,\d.]+$/.test(upper)) return false;
+      return true;
+    });
+    const lines = groupLines(nearby, 3.5).filter((line) => !genericLine(line.text));
+    const productLines = lines.filter((line) => !conditionLine(line.text)).slice(-4);
+    return {
+      productText: cleanText(productLines.map((x) => x.text).join(' ')),
+      productBox: unionBoxes(productLines.flatMap((x) => x.boxes))
+    };
+  }
+
+  function candidateQuality(input) {
+    const {
+      productName, packageText, category, detectedPrices, price, previousPrice,
+      validity, sourceBox, primaryProduct, strictProduct, priceBox, options, conditions
+    } = input;
+    const risks = [];
+    const evidence = [];
+    let score = 0.55;
+    const words = cleanText(productName).split(' ').filter(Boolean);
+    const agreement = productSimilarity(primaryProduct, strictProduct);
+
+    if (agreement >= 0.80) { score += 0.15; evidence.push('dupla associação espacial concordante'); }
+    else if (agreement >= 0.60) { score += 0.09; evidence.push('associação espacial compatível'); }
+    else if (strictProduct) { score -= 0.10; risks.push('association_disagreement'); }
+    else { score -= 0.04; risks.push('single_association_pass'); }
+
+    if (words.length >= 4) { score += 0.06; evidence.push('descrição detalhada'); }
+    else if (words.length >= 2) score += 0.03;
+    else risks.push('short_product_name');
+
+    if (packageText) { score += 0.06; evidence.push('embalagem identificada'); }
+    if (category && category !== 'outros') { score += 0.04; evidence.push('categoria reconhecida'); }
+    if (sourceBox && priceBox) { score += 0.04; evidence.push('origem espacial preservada'); }
+
+    if (validity?.startAt && validity?.endAt) { score += 0.08; evidence.push('validade identificada'); }
+    else { score -= 0.12; risks.push('missing_validity'); }
+
+    const countPrices = (detectedPrices || []).length;
+    if (countPrices === 1) { score += 0.05; evidence.push('preço único no bloco'); }
+    else if (countPrices === 2 && (options.lowerPriceIsClub || /\b(CLUBE|CLIENTE.*PAGA)\b/i.test(conditions || ''))) { score += 0.04; evidence.push('duplo preço com sinal de programa/clube'); }
+    else if (countPrices > 2) { score -= 0.12; risks.push('too_many_prices'); }
+    else if (countPrices === 2) { score -= 0.06; risks.push('ambiguous_price_kind'); }
+
+    if (conditions) score += 0.015;
+    if (!Number.isFinite(price) || price <= 0 || price >= 10000) risks.push('invalid_price');
+    if (previousPrice && Number(previousPrice) <= Number(price)) risks.push('invalid_previous_price');
+
+    const upper = cleanText(productName).toUpperCase();
+    if (/HOR[ÁA]RIO|VALID[AO]S?|TODO MUNDO|COMUNIDADE|WHATSAPP|OFERTAS ESPECIAIS/.test(upper)) {
+      score -= 0.18;
+      risks.push('header_contamination');
+    }
+    if ((upper.match(/R\$/g) || []).length || /\b\d{1,4}[,.]\d{2}\b/.test(upper)) {
+      score -= 0.12;
+      risks.push('price_inside_product_text');
+    }
+    if (words.length > 18) { score -= 0.08; risks.push('overlong_product_text'); }
+
+    const critical = new Set(['association_disagreement','missing_validity','too_many_prices','ambiguous_price_kind','invalid_price','invalid_previous_price','header_contamination','price_inside_product_text']);
+    if (risks.some((r) => critical.has(r))) score = Math.min(score, 0.965);
+    if (risks.includes('association_disagreement') || risks.includes('header_contamination')) score = Math.min(score, 0.89);
+    if (risks.includes('missing_validity') || risks.includes('invalid_price')) score = Math.min(score, 0.84);
+
+    score = Math.max(0.35, Math.min(0.995, score));
+    return {
+      confidence: score,
+      riskFlags: [...new Set(risks)],
+      evidence: [...new Set(evidence)],
+      associationAgreement: agreement,
+      automationSafe: !risks.some((r) => critical.has(r)) && score >= 0.97
+    };
+  }
+
   function findPriceBoxes(boxes) {
     const prices = [];
 
@@ -297,9 +385,11 @@
     };
   }
 
-  function buildCandidates(pageNumber, pageWidth, pageHeight, boxes, priceBoxes, globalCondition, options, inferCategory) {
+  function buildCandidates(pageNumber, pageWidth, pageHeight, boxes, priceBoxes, validity, options, inferCategory) {
+    const globalCondition = validity?.condition || '';
     const rawPrices = priceBoxes.map((price, index) => {
       const info = findProductForPrice(price.box, boxes);
+      const strict = findProductForPriceStrict(price.box, boxes);
       return {
         id: `${pageNumber}-${index}`,
         pageNumber,
@@ -308,6 +398,7 @@
         price: price.price,
         priceBox: price.box,
         productName: info.productText,
+        strictProductName: strict.productText,
         productBox: info.productBox,
         localConditions: info.localConditions
       };
@@ -331,21 +422,32 @@
     return clusters.map((cluster, index) => {
       const entriesSortedByName = [...cluster.entries].sort((a, b) => b.productName.length - a.productName.length);
       const productName = entriesSortedByName[0].productName;
+      const strictProduct = entriesSortedByName.map((x) => x.strictProductName).filter(Boolean).sort((a,b) => b.length-a.length)[0] || '';
       const uniquePrices = [...new Set(cluster.entries.map((x) => Number(x.price.toFixed(2))))].sort((a, b) => a - b);
       const promoPrice = uniquePrices[0];
       const normalPrice = uniquePrices.length > 1 ? uniquePrices[uniquePrices.length - 1] : null;
       const multiple = uniquePrices.length > 1;
-      const priceKind = multiple ? (options.lowerPriceIsClub ? 'club' : 'review') : 'general';
       const packageText = extractPackage(productName);
       const category = inferCategory ? (inferCategory(productName) || 'outros') : 'outros';
       const conditions = cleanText([globalCondition, ...cluster.entries.map((x) => x.localConditions)].filter(Boolean).join(' · '));
+      const clubSignal = /\b(CLUBE|CLIENTE\s+CLUBE|CLIENTE.*PAGA)\b/i.test(conditions);
+      const priceKind = multiple ? ((clubSignal || options.lowerPriceIsClub) ? 'club' : 'review') : 'general';
       const sourceBox = unionBoxes(cluster.entries.flatMap((x) => [x.productBox, x.priceBox]));
-      let confidence = 0.68;
-      if (productName.split(' ').length >= 3) confidence += 0.09;
-      if (packageText) confidence += 0.07;
-      if (category && category !== 'outros') confidence += 0.07;
-      if (multiple) confidence -= options.lowerPriceIsClub ? 0.02 : 0.08;
-      confidence = Math.max(0.45, Math.min(0.95, confidence));
+      const quality = candidateQuality({
+        productName,
+        packageText,
+        category,
+        detectedPrices: uniquePrices,
+        price: promoPrice,
+        previousPrice: normalPrice,
+        validity,
+        sourceBox,
+        primaryProduct: productName,
+        strictProduct,
+        priceBox: cluster.entries[0].priceBox,
+        options,
+        conditions
+      });
 
       return {
         id: `p${pageNumber}-c${index}`,
@@ -362,10 +464,18 @@
         priceKind,
         requiresClub: priceKind === 'club',
         clubName: priceKind === 'club' ? cleanText(options.clubName || '') : '',
+        clubSignal,
         conditions,
-        confidence,
+        confidence: quality.confidence,
+        riskFlags: quality.riskFlags,
+        evidence: quality.evidence,
+        associationAgreement: quality.associationAgreement,
+        automationSafe: quality.automationSafe,
         sourceBox,
+        startAt: validity?.startAt || null,
+        endAt: validity?.endAt || null,
         verified: false,
+        verificationMode: '',
         ignored: false,
         published: false,
         reviewed: false
@@ -428,7 +538,7 @@
       page.height,
       page.boxes,
       page.priceBoxes,
-      validity.condition,
+      validity,
       options,
       inferCategory
     ));
@@ -443,6 +553,7 @@
       validity,
       candidates,
       analyzedAt: Date.now(),
+      engineVersion: ENGINE_VERSION,
       pdfjsVersion: PDFJS_VERSION
     };
   }
@@ -479,6 +590,7 @@
 
   window.MercadorPDFImporter = {
     PDFJS_VERSION,
+    ENGINE_VERSION,
     analyzeFile,
     renderPreview,
     extractValidity,
