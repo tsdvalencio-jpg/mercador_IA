@@ -36,6 +36,11 @@
     if (mode === 'warn') el.classList.add('warn');
   }
 
+  function setSmartOfferCount(value) {
+    const el = $('smart-offer-count');
+    if (el) el.textContent = String(Math.max(0, Number(value) || 0));
+  }
+
   function geoErrorMessage(error) {
     const map = {
       1: 'Permissão de localização negada.',
@@ -137,6 +142,7 @@
       if (results) results.textContent = 'A lista continua funcionando normalmente. A localização é usada somente no aparelho para encontrar ofertas próximas.';
       state.offers = [];
       state.groupedOffers = new Map();
+      setSmartOfferCount(0);
       scheduleDecorate();
       return;
     }
@@ -146,6 +152,7 @@
       if (results) results.textContent = 'Adicione produtos à lista para comparar promoções próximas.';
       state.offers = [];
       state.groupedOffers = new Map();
+      setSmartOfferCount(0);
       scheduleDecorate();
       return;
     }
@@ -164,6 +171,7 @@
 
     const itemsWithOffers = state.groupedOffers.size;
     const markets = uniqueMarketCount(offers);
+    setSmartOfferCount(itemsWithOffers);
     summary.textContent = itemsWithOffers
       ? `${itemsWithOffers} de ${pending.length} item${pending.length === 1 ? '' : 's'} com oferta`
       : `Nenhuma oferta em ${state.radiusKm} km`;
@@ -217,7 +225,8 @@
       if (!offers.length) {
         zone.classList.add('no-offer');
         zone.textContent = `Sem oferta verificada em até ${state.radiusKm} km`;
-        details.appendChild(zone);
+        const actions = details.querySelector('.item-actions-inline');
+        if (actions) details.insertBefore(zone, actions); else details.appendChild(zone);
         return;
       }
 
@@ -241,7 +250,8 @@
           <span class="item-offer-distance">📍 ${distance} km · ${priceCondition}</span>
           <button type="button" class="item-offer-action" data-offers-item="${M.escapeHtml(itemId)}">${countLabel}</button>
         </div>`;
-      details.appendChild(zone);
+      const actions = details.querySelector('.item-actions-inline');
+      if (actions) details.insertBefore(zone, actions); else details.appendChild(zone);
     });
   }
 

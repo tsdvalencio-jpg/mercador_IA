@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Mercador IA — Sua Compra</title>
     <meta name="theme-color" content="#007aff"/>
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -13,10 +13,10 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
     
-    <script src="./js/firebase-config.js?v=1.3.0"></script>
-    <script src="./js/utils.js?v=1.3.0"></script>
-    <script src="./js/auth.js?v=1.3.0"></script>
-    <script src="./js/smart-matcher.js?v=1.3.0"></script>
+    <script src="./js/firebase-config.js?v=2.4.0"></script>
+    <script src="./js/utils.js?v=2.4.0"></script>
+    <script src="./js/auth.js?v=2.4.0"></script>
+    <script src="./js/smart-matcher.js?v=2.4.0"></script>
 
     <style>
         :root {
@@ -202,6 +202,62 @@
             body{padding:0 20px}.app-container{width:min(980px,100%)}.main-content{padding:18px 22px}.header-section{padding:15px 22px}
             .calculator-footer{padding-left:22px;padding-right:22px}.offer-sheet{border-radius:20px;margin-bottom:18px;max-height:78vh}.offer-sheet-overlay{padding:18px;align-items:flex-end}
         }
+
+        /* Mercador IA V2.4 — fluxo mobile profissional */
+        input,button,select,textarea{font-family:inherit}
+        input,select,textarea{font-size:16px}
+        .header-section{padding-top:max(10px,env(safe-area-inset-top))}
+        .smart-status-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px;align-items:stretch;min-width:0}
+        .smart-pill{display:flex;align-items:center;justify-content:center;gap:4px;min-width:0;padding:5px 7px;border-radius:999px;background:#edf1f5;color:#53606c;font-size:.69rem;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .smart-pill strong{color:#26313a}
+        .smart-pill.offer{background:#e9f8ee;color:#177337}
+        .smart-suggestions{display:flex;gap:6px;flex-wrap:wrap;overflow:visible;padding:7px 1px 1px}
+                .smart-suggestion{flex:0 1 auto;border:1px solid #dfe5ea;background:#fff;color:#34424e;border-radius:999px;padding:7px 10px;font-size:.78rem;font-weight:700;cursor:pointer;max-width:210px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .smart-suggestion:hover{border-color:#b7c8d8;background:#f8fbfd}
+        .item-row{cursor:default;display:grid;grid-template-columns:auto minmax(0,1fr);gap:9px;position:relative}
+        .item-row>.delete-btn{display:none}
+        .item-details{pointer-events:auto}.report-details{pointer-events:auto}
+        .item-main-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;min-width:0}
+        .item-state-hint{font-size:.72rem;color:var(--cor-texto-secundario);margin-top:4px;line-height:1.3}
+        .item-actions-inline{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;pointer-events:auto}
+        .item-action-btn{border:1px solid #dfe5ea;background:#f8fafc;color:#3e4d58;border-radius:9px;min-height:42px;padding:7px 9px;font-size:.74rem;font-weight:800;cursor:pointer}
+        .item-action-btn.primary{background:#e9f2ff;border-color:#cddfff;color:#0a63c7}
+        .item-action-btn.warn{background:#fff6e7;border-color:#ffe1ab;color:#935b00}
+        .item-action-btn.danger{background:#fff0ef;border-color:#ffd3cf;color:#b52e27;margin-left:auto}
+        .item-action-btn:active{transform:scale(.98)}
+        .tabs{position:sticky;top:-1px;z-index:8;background:var(--cor-fundo);padding:2px 0 7px}
+        .tab-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:48px}
+        .tab-count{font-size:.63rem;opacity:.78;font-weight:800}
+        .report-item{cursor:default;align-items:flex-start}
+        .report-actions{display:flex;flex-direction:column;gap:5px;margin-left:7px;flex:0 0 auto}
+        .report-action-btn{width:42px;height:40px;border:0;border-radius:9px;background:#eef2f6;display:grid;place-items:center;cursor:pointer;font-size:.9rem}
+        .report-action-btn.edit{background:#eaf3ff;color:#0869c9}
+        .report-action-btn.delete{background:#fff0ef;color:#bc3028}
+        .report-edited{display:inline-flex;margin-top:5px;padding:3px 6px;border-radius:999px;background:#fff6e7;color:#8c5906;font-size:.66rem;font-weight:800;width:max-content}
+        .report-view-meta{display:grid;gap:6px;margin:-8px 0 12px;padding:10px;border-radius:10px;background:#eef3f7;font-size:.78rem;color:#53606b}
+        .report-audit{border-top:1px solid #dce2e7;margin-top:12px;padding-top:10px}
+        .report-audit h4{margin:0 0 8px;font-size:.86rem}
+        .report-audit-entry{padding:8px 0;border-bottom:1px dashed #dce2e7;font-size:.75rem;line-height:1.4;color:#5d6872}
+        .report-audit-entry:last-child{border-bottom:0}
+        .report-edit-items{display:grid;gap:8px;margin-top:10px}
+        .report-edit-row{display:grid;grid-template-columns:minmax(0,1fr) 72px 90px 38px;gap:6px;align-items:center;padding:8px;border:1px solid #dfe5ea;border-radius:10px;background:#fff}
+        .report-edit-row input{width:100%;min-width:0;padding:8px;border:1px solid #d5dde4;border-radius:8px}
+        .report-edit-remove{height:38px;border:0;border-radius:8px;background:#fff0ef;color:#b52e27;cursor:pointer}
+        .report-edit-total{margin-top:10px;text-align:right;font-weight:850;color:#16883a}
+        .report-legacy-note{padding:9px 10px;border-radius:9px;background:#fff7e8;color:#8b5900;font-size:.75rem;line-height:1.4;margin-top:10px}
+        .powered-user-footer{text-align:center;color:#aeb6bd;font-size:.66rem;padding:8px 0 0;line-height:1.25}
+        .powered-user-footer strong{color:#e5eaee}
+        .modal-content h3{margin-bottom:12px}
+        .modal-field{display:grid;gap:5px;margin-bottom:12px}
+        .modal-field label{font-size:.78rem;font-weight:800;color:#5c6872}
+        .modal-field input,.modal-field textarea{width:100%;box-sizing:border-box;padding:10px 11px;border:1px solid var(--cor-borda);border-radius:9px;background:#fff}
+        .modal-field textarea{min-height:76px;resize:vertical}
+        @media(max-width:430px){
+            .header-controls{grid-template-columns:minmax(0,1fr) 48px}.header-controls>.btn,#form-adicionar-item>.btn{width:48px;height:48px}
+            #form-adicionar-item{grid-template-columns:minmax(0,1fr) 48px}.smart-status-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}.smart-pill{padding:5px 6px;font-size:.67rem}
+            .item-actions-inline{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.item-action-btn{padding:6px 4px;min-width:0}.item-action-btn.danger{margin-left:0}
+            .report-edit-row{grid-template-columns:minmax(0,1fr) 62px 78px 36px;gap:4px;padding:6px}.report-edit-row input{padding:7px 5px;font-size:14px}
+        }
     </style>
 </head>
 <body>
@@ -226,13 +282,20 @@
                 <div id="header-total">R$ 0,00</div>
             </div>
             <div class="header-controls">
-                <form id="form-adicionar-item">
-                    <input type="text" id="input-novo-item" placeholder="Adicionar item...">
-                    <button type="submit" class="btn btn-primary" title="Adicionar">+</button>
+                <form id="form-adicionar-item" autocomplete="off">
+                    <input type="text" id="input-novo-item" placeholder="O que está faltando?" aria-label="Adicionar produto à lista">
+                    <button type="submit" class="btn btn-primary" title="Adicionar produto">+</button>
                 </form>
-                <button id="btn-finalizar" class="btn btn-success" title="Finalizar Compra e Gerar Relatório">
+                <button id="btn-finalizar" class="btn btn-success" title="Finalizar compra e gerar relatório">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                 </button>
+            </div>
+            <div id="smart-suggestions" class="smart-suggestions" hidden aria-label="Sugestões de produtos"></div>
+            <div class="smart-status-row" aria-label="Resumo da compra">
+                <span class="smart-pill">📝 <strong id="smart-pending-count">0</strong> faltando</span>
+                <span class="smart-pill">🛒 <strong id="smart-bought-count">0</strong> no carrinho</span>
+                <span class="smart-pill">⏸ <strong id="smart-deferred-count">0</strong> adiados</span>
+                <span class="smart-pill offer">🔥 <strong id="smart-offer-count">0</strong> com oferta</span>
             </div>
         </header>
 
@@ -254,10 +317,10 @@
             </section>
 
             <div class="tabs">
-                <button class="tab-btn active" data-tab="faltando">A Comprar</button>
-                <button class="tab-btn" data-tab="comprados">Comprados</button>
-                <button class="tab-btn" data-tab="adiados">Adiados</button>
-                <button class="tab-btn" data-tab="relatorios">Relatórios</button>
+                <button class="tab-btn active" data-tab="faltando"><span>A Comprar</span><small class="tab-count" id="tab-count-faltando">0</small></button>
+                <button class="tab-btn" data-tab="comprados"><span>Comprados</span><small class="tab-count" id="tab-count-comprados">0</small></button>
+                <button class="tab-btn" data-tab="adiados"><span>Adiados</span><small class="tab-count" id="tab-count-adiados">0</small></button>
+                <button class="tab-btn" data-tab="relatorios"><span>Relatórios</span><small class="tab-count" id="tab-count-relatorios">0</small></button>
             </div>
             <div id="lista-faltando-container" class="list-container active"><ul id="lista-faltando" class="item-list"></ul></div>
             <div id="lista-comprados-container" class="list-container"><ul id="lista-comprados" class="item-list"></ul></div>
@@ -279,6 +342,7 @@
                     <button class="clear" data-action="clear">C</button><button>0</button><button data-action="decimal">.</button><button class="operator" data-action="divide">÷</button>
                 </div>
             </div>
+            <div class="powered-user-footer">Powered by <strong>thIAguinho Soluções Digitais</strong></div>
         </footer>
     </div>
 
@@ -286,7 +350,7 @@
         <div class="modal-content">
             <div style="margin-bottom: 15px;">
                 <label for="purchase-location" style="display: block; margin-bottom: 5px; font-size: 0.9rem; color: var(--cor-texto-secundario);">Local da Compra:</label>
-                <input type="text" id="purchase-location" placeholder="Ex: Supermercado Central" style="width: 100%; box-sizing: border-box; padding: 10px; border-radius: 8px; border: 1px solid var(--cor-borda); font-size: 1rem;">
+                <input type="text" id="purchase-location" list="purchase-location-options" placeholder="Ex: Supermercado Central" style="width: 100%; box-sizing: border-box; padding: 10px; border-radius: 8px; border: 1px solid var(--cor-borda); font-size: 1rem;"><datalist id="purchase-location-options"></datalist>
             </div>
             <div id="report-paper"></div>
             <div class="modal-actions" style="justify-content: space-between;">
@@ -299,9 +363,30 @@
     <div id="report-view-modal" class="modal-overlay">
         <div class="modal-content">
             <h3 style="margin-top: 0;">Relatório de Compra</h3>
+            <div id="report-view-meta" class="report-view-meta"></div>
             <div id="report-view-content"></div>
+            <div id="report-view-audit" class="report-audit"></div>
             <div class="modal-actions">
-                <button id="close-view-modal-btn">Fechar</button>
+                <button id="edit-view-report-btn" type="button">Editar relatório</button>
+                <button id="close-view-modal-btn" type="button">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="report-edit-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="margin-top:0;">Editar compra finalizada</h3>
+            <div class="modal-field"><label for="edit-report-location">Local da compra</label><input id="edit-report-location" type="text" list="purchase-location-options" maxlength="160" placeholder="Ex.: Supermercado Central"></div>
+            <div class="modal-field"><label for="edit-report-note">Observação</label><textarea id="edit-report-note" maxlength="500" placeholder="Opcional. Ex.: compra semanal, cupom conferido..."></textarea></div>
+            <div id="report-edit-items-wrap">
+                <div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><strong>Itens e valores</strong><button id="add-report-item-btn" type="button">+ Item</button></div>
+                <div id="report-edit-items" class="report-edit-items"></div>
+                <div id="report-edit-total" class="report-edit-total">Total: R$ 0,00</div>
+            </div>
+            <div id="report-edit-legacy-note" class="report-legacy-note" hidden>Este é um relatório criado antes do histórico estruturado de itens. O local e a observação podem ser editados; os valores originais permanecem preservados.</div>
+            <div class="modal-actions" style="margin-top:14px">
+                <button id="cancel-report-edit-btn" type="button">Cancelar</button>
+                <button id="save-report-edit-btn" type="button" class="btn btn-success" style="padding:8px 12px;font-size:1rem;width:auto;height:auto">Salvar alterações</button>
             </div>
         </div>
     </div>
@@ -343,6 +428,8 @@ document.addEventListener('DOMContentLoaded', () => {
         activeItemId: null,
         calcDisplay: '0',
         currentTab: 'faltando',
+        selectedReportId: null,
+        editingReportId: null,
         ui: { isCalculatorCollapsed: true },
     };
 
@@ -367,7 +454,22 @@ document.addEventListener('DOMContentLoaded', () => {
         finalizePurchaseBtn: document.getElementById('finalize-purchase-btn'),
         reportViewModal: document.getElementById('report-view-modal'),
         reportViewContent: document.getElementById('report-view-content'),
+        reportViewMeta: document.getElementById('report-view-meta'),
+        reportViewAudit: document.getElementById('report-view-audit'),
         closeViewModalBtn: document.getElementById('close-view-modal-btn'),
+        editViewReportBtn: document.getElementById('edit-view-report-btn'),
+        reportEditModal: document.getElementById('report-edit-modal'),
+        editReportLocation: document.getElementById('edit-report-location'),
+        editReportNote: document.getElementById('edit-report-note'),
+        reportEditItemsWrap: document.getElementById('report-edit-items-wrap'),
+        reportEditItems: document.getElementById('report-edit-items'),
+        reportEditTotal: document.getElementById('report-edit-total'),
+        reportEditLegacyNote: document.getElementById('report-edit-legacy-note'),
+        addReportItemBtn: document.getElementById('add-report-item-btn'),
+        cancelReportEditBtn: document.getElementById('cancel-report-edit-btn'),
+        saveReportEditBtn: document.getElementById('save-report-edit-btn'),
+        smartSuggestions: document.getElementById('smart-suggestions'),
+        purchaseLocationOptions: document.getElementById('purchase-location-options'),
     };
 
     const emojiMap = {
@@ -404,6 +506,104 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const getEmojiForItem = (nome) => { const nomeLower = nome.toLowerCase(); for (const key in emojiMap) if (nomeLower.includes(key)) return emojiMap[key]; return emojiMap.default; };
     
+    const normalizeItemName = (value) => {
+        if (window.MercadorIA?.normalizeText) return window.MercadorIA.normalizeText(value || '');
+        return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    };
+
+    const reportItemsArray = (report) => {
+        if (!report || !report.items) return [];
+        const raw = Array.isArray(report.items) ? report.items : Object.values(report.items || {});
+        return raw.map((item) => ({
+            nome: String(item?.nome ?? item?.name ?? '').trim(),
+            quantidade: Number(item?.quantidade ?? item?.quantity ?? 1),
+            preco: Number(item?.preco ?? item?.price ?? 0)
+        })).filter((item) => item.nome && Number.isFinite(item.quantidade) && item.quantidade > 0 && Number.isFinite(item.preco) && item.preco >= 0);
+    };
+
+    const buildReportText = ({ location, items, total, createdAt, note }) => {
+        const when = new Date(createdAt || Date.now()).toLocaleString('pt-BR');
+        let text = `*** RELATÓRIO DE COMPRA ***\n\nLOCAL: ${location || 'Não informado'}\nDATA: ${when}\n------------------------------------------\nITEM               QTD      PREÇO     TOTAL\n------------------------------------------\n`;
+        (items || []).forEach((i) => {
+            const name = String(i.nome || '').substring(0, 18).padEnd(18);
+            const qty = String(Number(i.quantidade || 1)).padStart(5);
+            const price = Number(i.preco || 0).toFixed(2).padStart(9);
+            const subtotal = (Number(i.quantidade || 1) * Number(i.preco || 0)).toFixed(2).padStart(9);
+            text += `${name} ${qty} x ${price} = ${subtotal}\n`;
+        });
+        text += `------------------------------------------\nTOTAL A PAGAR: R$ ${Number(total || 0).toFixed(2)}\n`;
+        if (note) text += `\nOBSERVAÇÃO: ${note}\n`;
+        text += `\nPowered by thIAguinho Soluções Digitais`;
+        return text;
+    };
+
+    const legacyReportTextWithEdits = (report, location, note) => {
+        let text = String(report?.content || '').trim();
+        text = text.replace(/\*{5}\s*thIAguinho Soluções(?: Digitais)?\s*\*{5}/gi, 'Powered by thIAguinho Soluções Digitais');
+        text = text.replace(/\n?Powered by thIAguinho Soluções Digitais\s*$/i, '');
+        if (/^LOCAL:.*$/m.test(text)) text = text.replace(/^LOCAL:.*$/m, `LOCAL: ${location || 'Não informado'}`);
+        else {
+            const titleMatch = text.match(/^(\*{3}[^\n]*\*{3})/m);
+            text = titleMatch ? text.replace(titleMatch[0], `${titleMatch[0]}\n\nLOCAL: ${location || 'Não informado'}`) : `LOCAL: ${location || 'Não informado'}\n${text}`;
+        }
+        text = text.replace(/\nOBSERVAÇÃO:.*?(?=\n(?:Powered by|\*{3}|TOTAL)|$)/gis, '');
+        if (note) text += `\n\nOBSERVAÇÃO: ${note}`;
+        text += `\n\nPowered by thIAguinho Soluções Digitais`;
+        return text;
+    };
+
+    const previewReportTextWithLocation = () => {
+        const location = ui.purchaseLocationInput.value.trim() || 'Não informado';
+        let text = String(ui.reportPaper.textContent || '');
+        if (/^LOCAL:.*$/m.test(text)) return text.replace(/^LOCAL:.*$/m, `LOCAL: ${location}`);
+        const title = text.match(/^(\*{3}[^\n]*\*{3})/m);
+        return title ? text.replace(title[0], `${title[0]}\n\nLOCAL: ${location}`) : `LOCAL: ${location}\n${text}`;
+    };
+
+    const reportHistoryEntries = (report) => Object.values(report?.editHistory || {}).sort((a,b) => new Date(b.editedAt || 0) - new Date(a.editedAt || 0));
+
+    const updatePurchaseLocationOptions = () => {
+        if (!ui.purchaseLocationOptions) return;
+        const names = [...new Set(state.reports.map((r) => String(r.location || '').trim()).filter((x) => x && x !== 'Não informado'))].sort((a,b)=>a.localeCompare(b));
+        ui.purchaseLocationOptions.innerHTML = names.map((name) => `<option value="${window.MercadorIA?.escapeHtml ? window.MercadorIA.escapeHtml(name) : name.replace(/"/g,'&quot;')}"></option>`).join('');
+    };
+
+    const frequentProductSuggestions = (query = '') => {
+        const current = new Set(state.itens.map((item) => normalizeItemName(item.nome)));
+        const freq = new Map();
+        [...state.reports].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,30).forEach((report, reportIndex) => {
+            reportItemsArray(report).forEach((item) => {
+                const key = normalizeItemName(item.nome); if (!key || current.has(key)) return;
+                const old = freq.get(key) || { name:item.nome, count:0, recent:0 };
+                old.count += 1; old.recent = Math.max(old.recent, 30 - reportIndex); freq.set(key, old);
+            });
+        });
+        const q = normalizeItemName(query);
+        return [...freq.values()].filter((x) => !q || normalizeItemName(x.name).includes(q)).sort((a,b)=>(b.count-a.count)||(b.recent-a.recent)||a.name.localeCompare(b.name)).slice(0,8);
+    };
+
+    const renderSmartSuggestions = () => {
+        if (!ui.smartSuggestions) return;
+        const suggestions = frequentProductSuggestions(ui.input.value);
+        if (!suggestions.length) { ui.smartSuggestions.hidden = true; ui.smartSuggestions.innerHTML=''; return; }
+        ui.smartSuggestions.hidden = false;
+        ui.smartSuggestions.innerHTML = suggestions.map((x) => `<button type="button" class="smart-suggestion" data-smart-add="${encodeURIComponent(x.name)}" title="Usado em ${x.count} compra${x.count===1?'':'s'} anterior${x.count===1?'':'es'}">${getEmojiForItem(x.name)} ${window.MercadorIA?.escapeHtml ? window.MercadorIA.escapeHtml(x.name) : x.name}</button>`).join('');
+    };
+
+    const updateReportEditTotal = () => {
+        if (!ui.reportEditItems || !ui.reportEditTotal) return 0;
+        const rows = [...ui.reportEditItems.querySelectorAll('.report-edit-row')];
+        const total = rows.reduce((sum,row) => sum + (Number(row.querySelector('[data-edit-qty]')?.value || 0) * Number(row.querySelector('[data-edit-price]')?.value || 0)), 0);
+        ui.reportEditTotal.textContent = `Total: R$ ${total.toFixed(2)}`;
+        return total;
+    };
+
+    const appendReportEditItemRow = (item = {nome:'',quantidade:1,preco:0}) => {
+        const row = document.createElement('div'); row.className='report-edit-row';
+        row.innerHTML = `<input data-edit-name aria-label="Produto" value="${window.MercadorIA?.escapeHtml ? window.MercadorIA.escapeHtml(item.nome || '') : String(item.nome||'').replace(/"/g,'&quot;')}" placeholder="Produto"><input data-edit-qty aria-label="Quantidade" type="number" min="0.01" step="0.01" value="${Number(item.quantidade || 1)}"><input data-edit-price aria-label="Preço unitário" type="number" min="0" step="0.01" value="${Number(item.preco || 0).toFixed(2)}"><button type="button" class="report-edit-remove" data-remove-edit-item aria-label="Remover item">✕</button>`;
+        ui.reportEditItems.appendChild(row); updateReportEditTotal();
+    };
+
     const store = { 
         loadUI: () => {
              const savedState = localStorage.getItem(`uiState-${userId}`);
@@ -422,6 +622,8 @@ document.addEventListener('DOMContentLoaded', () => {
             render.calculatorDisplay();
             render.activeItemDisplay();
             render.tabs();
+            renderSmartSuggestions();
+            updatePurchaseLocationOptions();
         },
         calculator: () => ui.calculatorFooter.classList.toggle('collapsed', state.ui.isCalculatorCollapsed),
         lists: () => {
@@ -441,8 +643,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const li = document.createElement('li');
             li.className = `item-row status-${item.status}`;
             li.dataset.id = item.id;
-            const priceInfo = item.status === 'comprado' ? `<div class="item-price-info">${item.quantidade} × R$ ${item.preco.toFixed(2)} = R$ ${(item.quantidade * item.preco).toFixed(2)}</div>` : '';
-            li.innerHTML = `<span class="item-emoji">${item.emoji}</span><div class="item-details"><div class="item-name">${item.nome}</div>${priceInfo}</div><button class="delete-btn" data-id="${item.id}"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>`;
+            const safeName = window.MercadorIA?.escapeHtml ? window.MercadorIA.escapeHtml(item.nome) : item.nome;
+            const priceInfo = item.status === 'comprado' ? `<div class="item-price-info">${item.quantidade} × R$ ${Number(item.preco).toFixed(2)} = <strong>R$ ${(item.quantidade * item.preco).toFixed(2)}</strong></div>` : '';
+            const hint = item.status === 'faltando' ? 'Toque em “Lançar preço” quando colocar no carrinho.' : (item.status === 'comprado' ? 'Item lançado na compra atual.' : 'Guardado para a próxima compra.');
+            const actions = item.status === 'faltando'
+              ? `<button type="button" class="item-action-btn primary" data-item-select="${item.id}">🧮 Lançar preço</button><button type="button" class="item-action-btn warn" data-item-defer="${item.id}">⏸ Adiar</button>`
+              : `<button type="button" class="item-action-btn primary" data-item-restore="${item.id}">↩ Voltar à lista</button><span></span>`;
+            li.innerHTML = `<span class="item-emoji">${item.emoji || getEmojiForItem(item.nome)}</span><div class="item-details"><div class="item-main-head"><div class="item-name">${safeName}</div></div>${priceInfo}<div class="item-state-hint">${hint}</div><div class="item-actions-inline">${actions}<button type="button" class="item-action-btn danger" data-item-delete="${item.id}">🗑 Excluir</button></div></div>`;
             return li;
         },
         reports: () => {
@@ -450,32 +657,24 @@ document.addEventListener('DOMContentLoaded', () => {
             listEl.innerHTML = '';
             if (state.reports.length === 0) {
                 listEl.innerHTML = `<p style="text-align:center; padding: 20px;">Nenhum relatório salvo.</p>`;
+                updatePurchaseLocationOptions();
                 return;
             }
             state.reports.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).forEach(report => {
-                const li = document.createElement('li');
-                li.className = 'report-item';
-                li.dataset.id = report.id;
+                const li = document.createElement('li'); li.className='report-item'; li.dataset.id=report.id;
                 const reportDate = new Date(report.createdAt).toLocaleString('pt-BR');
-                const location = report.location ? report.location : 'Local não informado';
-                li.innerHTML = `
-                    <div class="report-details" style="cursor:pointer;">
-                        <div class="report-location">${location}</div>
-                        <div class="report-date" style="font-size:0.9rem; font-weight: 400;">${reportDate}</div>
-                        <div class="report-total">Total: R$ ${report.total.toFixed(2)}</div>
-                    </div>
-                    <button class="delete-report-btn" data-id="${report.id}" title="Excluir Relatório">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                    </button>
-                `;
+                const location = report.location && report.location !== 'Não informado' ? report.location : 'Local não informado';
+                const edits = Number(report.editCount || Object.keys(report.editHistory || {}).length || 0);
+                li.innerHTML = `<div class="report-details" style="cursor:pointer;"><div class="report-location">${window.MercadorIA?.escapeHtml ? window.MercadorIA.escapeHtml(location) : location}</div><div class="report-date" style="font-size:.82rem;font-weight:500">${reportDate}</div><div class="report-total">Total: R$ ${Number(report.total || 0).toFixed(2)}</div>${edits ? `<span class="report-edited">✎ editado ${edits}x</span>`:''}</div><div class="report-actions"><button type="button" class="report-action-btn edit" data-edit-report="${report.id}" title="Editar relatório">✎</button><button type="button" class="report-action-btn delete" data-delete-report="${report.id}" title="Excluir relatório">🗑</button></div>`;
                 listEl.appendChild(li);
             });
+            updatePurchaseLocationOptions();
         },
         total: () => { const total = state.itens.filter(i => i.status === 'comprado').reduce((acc, item) => acc + (item.preco * item.quantidade), 0); ui.headerTotal.textContent = `R$ ${total.toFixed(2)}`; },
         activeItemHighlight: () => document.querySelectorAll('.item-row').forEach(row => row.classList.toggle('active', row.dataset.id == state.activeItemId)),
         calculatorDisplay: () => ui.calcDisplay.textContent = state.calcDisplay.replace('.', ','),
         activeItemDisplay: () => { const activeItem = state.itens.find(i => i.id == state.activeItemId); ui.activeItemDisplay.textContent = activeItem ? activeItem.nome : 'Nenhum item selecionado'; },
-        tabs: () => { const adiadosTab = document.querySelector('[data-tab="adiados"]'); if (state.activeItemId && state.itens.find(i => i.id == state.activeItemId)?.status === 'faltando') { adiadosTab.classList.add('action-mode'); adiadosTab.textContent = 'Adiar Item'; } else { adiadosTab.classList.remove('action-mode'); adiadosTab.textContent = 'Adiados'; } }
+        tabs: () => { const pending=state.itens.filter(i=>i.status==='faltando').length, bought=state.itens.filter(i=>i.status==='comprado').length, deferred=state.itens.filter(i=>i.status==='adiado').length; document.getElementById('tab-count-faltando').textContent=pending; document.getElementById('tab-count-comprados').textContent=bought; document.getElementById('tab-count-adiados').textContent=deferred; document.getElementById('tab-count-relatorios').textContent=state.reports.length; document.getElementById('smart-pending-count').textContent=pending; document.getElementById('smart-bought-count').textContent=bought; document.getElementById('smart-deferred-count').textContent=deferred; const adiadosTab=document.querySelector('[data-tab="adiados"]'); const label=adiadosTab.querySelector('span'); if(state.activeItemId && state.itens.find(i=>i.id==state.activeItemId)?.status==='faltando'){adiadosTab.classList.add('action-mode');label.textContent='Adiar';}else{adiadosTab.classList.remove('action-mode');label.textContent='Adiados';} }
     };
 
     const calculator = {
@@ -511,9 +710,10 @@ document.addEventListener('DOMContentLoaded', () => {
             store.loadUI();
             render.calculator();
             listRef.on('value', (snapshot) => { const data = snapshot.val(); state.itens = data ? Object.keys(data).map(key => ({ ...data[key], id: key })) : []; render.all(); });
-            reportsRef.on('value', (snapshot) => { const data = snapshot.val(); state.reports = data ? Object.keys(data).map(key => ({ ...data[key], id: key })) : []; render.reports(); });
+            reportsRef.on('value', (snapshot) => { const data = snapshot.val(); state.reports = data ? Object.keys(data).map(key => ({ ...data[key], id: key })) : []; render.reports(); render.tabs(); renderSmartSuggestions(); });
         },
-        addItem: (e) => { e.preventDefault(); const nome = ui.input.value.trim(); if (nome) { const newItemId = Date.now(); listRef.child(newItemId).set({ id: newItemId, nome: nome, emoji: getEmojiForItem(nome), status: 'faltando', quantidade: 1, preco: 0 }); ui.input.value = ''; ui.input.focus(); } },
+        addItemByName: async (rawName) => { const nome=String(rawName||'').trim(); if(!nome)return; const normalized=normalizeItemName(nome); const existing=state.itens.find((item)=>normalizeItemName(item.nome)===normalized); if(existing){ interactions.switchTab(existing.status==='comprado'?'comprados':existing.status==='adiado'?'adiados':'faltando'); setTimeout(()=>document.querySelector(`.item-row[data-id="${existing.id}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}),80); window.MercadorIA?.toast?.('Esse produto já está na sua lista.', 'warning'); return; } const newItemId=Date.now(); await listRef.child(newItemId).set({ id:newItemId, nome, emoji:getEmojiForItem(nome), status:'faltando', quantidade:1, preco:0, createdAt:Date.now() }); ui.input.value=''; renderSmartSuggestions(); ui.input.focus(); },
+        addItem: (e) => { e.preventDefault(); interactions.addItemByName(ui.input.value); },
         deleteItem: (id) => { if (confirm('Tem certeza que deseja remover este item?')) { if (state.activeItemId === id) state.activeItemId = null; listRef.child(id).remove(); } },
         deleteReport: (reportId) => {
             if (confirm('Tem certeza que deseja excluir este relatório? Esta ação não pode ser desfeita.')) {
@@ -541,116 +741,105 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleCalculator: () => { state.ui.isCalculatorCollapsed = !state.ui.isCalculatorCollapsed; store.saveUI(); render.calculator(); },
         openReportModal: () => {
             const faltando = state.itens.filter(i => i.status === 'faltando');
-            if (faltando.length > 0) {
-                 const userConfirmed = confirm('Você tem certeza que quer adiar os itens em lista e finalizar a compra?');
-                if (!userConfirmed) {
-                    return;
-                }
-            }
-            const comprados = state.itens.filter(i => i.status === 'comprado'); 
-            if (comprados.length === 0) { 
-                alert('Nenhum item foi comprado ainda.'); 
-                return; 
-            }
-            const total = comprados.reduce((acc, i) => acc + (i.preco * i.quantidade), 0);
-            let reportText = `*** CUPOM FISCAL ***\n\nDATA: ${new Date().toLocaleString('pt-BR')}\n--------------------------------\nITEM      QTD    PREÇO    TOTAL\n--------------------------------\n`;
-            comprados.forEach(i => { reportText += `${i.nome.substring(0, 8).padEnd(8)} ${String(i.quantidade).padStart(4)} x ${i.preco.toFixed(2).padStart(8)} = ${(i.quantidade * i.preco).toFixed(2).padStart(8)}\n`; });
-            reportText += `--------------------------------\nTOTAL A PAGAR: R$ ${total.toFixed(2)}\n\n***** thIAguinho Soluções *****`;
-            ui.reportPaper.textContent = reportText;
-            ui.purchaseLocationInput.value = '';
-            ui.reportModal.classList.add('visible');
-        },
-        finalizeAndReset: () => {
+            if (faltando.length > 0 && !confirm(`Ainda existem ${faltando.length} item${faltando.length===1?'':'s'} em A Comprar. Finalizar agora vai mantê-los para a próxima compra. Deseja continuar?`)) return;
             const comprados = state.itens.filter(i => i.status === 'comprado');
-            if (comprados.length === 0) {
-                ui.reportModal.classList.remove('visible');
-                return;
-            }
-
-            const location = ui.purchaseLocationInput.value.trim();
-            const total = comprados.reduce((acc, i) => acc + (i.preco * i.quantidade), 0);
-            
-            let reportText = `*** CUPOM FISCAL ***\n\nLOCAL: ${location || 'Não informado'}\nDATA: ${new Date().toLocaleString('pt-BR')}\n--------------------------------\nITEM      QTD    PREÇO    TOTAL\n--------------------------------\n`;
-            comprados.forEach(i => { reportText += `${i.nome.substring(0, 8).padEnd(8)} ${String(i.quantidade).padStart(4)} x ${i.preco.toFixed(2).padStart(8)} = ${(i.quantidade * i.preco).toFixed(2).padStart(8)}\n`; });
-            reportText += `--------------------------------\nTOTAL A PAGAR: R$ ${total.toFixed(2)}\n\n***** thIAguinho Soluções *****`;
-
-            const reportData = {
-                content: reportText,
-                location: location || 'Não informado',
-                total: total,
-                createdAt: new Date().toISOString()
-            };
-
-            reportsRef.push(reportData).then(() => {
+            if (!comprados.length) { window.MercadorIA?.toast?.('Nenhum item foi lançado como comprado ainda.', 'warning') || alert('Nenhum item foi comprado ainda.'); return; }
+            const total = comprados.reduce((acc,i)=>acc+(Number(i.preco)*Number(i.quantidade)),0);
+            const previewItems = comprados.map(i=>({nome:i.nome,quantidade:Number(i.quantidade),preco:Number(i.preco)}));
+            ui.reportPaper.textContent = buildReportText({location:'Não informado',items:previewItems,total,createdAt:new Date().toISOString(),note:''});
+            ui.purchaseLocationInput.value=''; updatePurchaseLocationOptions(); ui.reportModal.classList.add('visible');
+        },
+        finalizeAndReset: async () => {
+            const comprados = state.itens.filter(i => i.status === 'comprado');
+            if (!comprados.length) { ui.reportModal.classList.remove('visible'); return; }
+            const location = ui.purchaseLocationInput.value.trim() || 'Não informado';
+            const createdAt = new Date().toISOString();
+            const items = comprados.map((i)=>({ nome:i.nome, quantidade:Number(i.quantidade), preco:Number(i.preco), total:Number(i.quantidade)*Number(i.preco) }));
+            const total = items.reduce((acc,i)=>acc+i.total,0);
+            const reportData = { content:buildReportText({location,items,total,createdAt,note:''}), location, total, createdAt, purchaseAt:createdAt, items, note:'', editCount:0, createdBy:userId, formatVersion:2 };
+            ui.finalizePurchaseBtn.disabled=true;
+            try {
+                await reportsRef.push(reportData);
                 const aAdiar = state.itens.filter(i => i.status === 'adiado' || i.status === 'faltando');
                 const newItems = {};
-                if (aAdiar.length > 0) {
-                    aAdiar.forEach(item => {
-                        const oldId = item.id;
-                        let newItemData = { ...item };
-                        delete newItemData.id;
-                        newItemData.status = 'faltando';
-                        newItemData.preco = 0;
-                        newItemData.quantidade = 1;
-                        newItems[oldId] = newItemData;
-                    });
-                }
-                listRef.set(newItems);
-            }).catch(error => {
-                console.error("Erro ao finalizar a compra:", error);
-                alert("Ocorreu um erro. Verifique sua conexão e tente novamente.");
-            });
-
-            ui.reportModal.classList.remove('visible');
-            interactions.switchTab('faltando');
+                aAdiar.forEach((item)=>{ const oldId=item.id; const data={...item,status:'faltando',preco:0,quantidade:1}; delete data.id; newItems[oldId]=data; });
+                await listRef.set(newItems);
+                ui.reportModal.classList.remove('visible'); interactions.switchTab('faltando');
+                window.MercadorIA?.toast?.('Compra finalizada e relatório salvo.', 'success');
+            } catch(error) { console.error('Erro ao finalizar a compra:',error); window.MercadorIA?.toast?.('Não foi possível finalizar a compra. Verifique sua conexão e tente novamente.','error',7000) || alert('Ocorreu um erro.'); }
+            finally { ui.finalizePurchaseBtn.disabled=false; }
         },
         showReport: (reportId) => {
-            const report = state.reports.find(r => r.id === reportId);
-            if(report) {
-                ui.reportViewContent.textContent = report.content;
-                ui.reportViewModal.classList.add('visible');
-            }
+            const report=state.reports.find(r=>r.id===reportId); if(!report)return;
+            state.selectedReportId=reportId; ui.reportViewContent.textContent=report.content;
+            const edits=reportHistoryEntries(report); const editedAt=report.lastEditedAt ? new Date(report.lastEditedAt).toLocaleString('pt-BR') : '';
+            ui.reportViewMeta.innerHTML=`<span><strong>Local:</strong> ${window.MercadorIA?.escapeHtml ? window.MercadorIA.escapeHtml(report.location || 'Não informado') : report.location}</span><span><strong>Finalizada:</strong> ${new Date(report.createdAt).toLocaleString('pt-BR')}</span><span><strong>Total:</strong> R$ ${Number(report.total||0).toFixed(2)}</span>${editedAt?`<span><strong>Última edição:</strong> ${editedAt}</span>`:''}`;
+            ui.reportViewAudit.innerHTML=edits.length?`<h4>Histórico de alterações</h4>${edits.map((entry)=>`<div class="report-audit-entry"><strong>${new Date(entry.editedAt).toLocaleString('pt-BR')}</strong> · ${window.MercadorIA?.escapeHtml ? window.MercadorIA.escapeHtml(entry.summary || 'Relatório editado') : entry.summary || 'Relatório editado'}</div>`).join('')}`:'<h4>Histórico de alterações</h4><div class="report-audit-entry">Nenhuma edição registrada.</div>';
+            ui.reportViewModal.classList.add('visible');
         },
-        downloadReport: () => { 
-            const location = ui.purchaseLocationInput.value.trim();
-            const currentReportText = ui.reportPaper.textContent;
-            const updatedReportText = currentReportText.replace('*** CUPOM FISCAL ***', `*** CUPOM FISCAL ***\n\nLOCAL: ${location || 'Não informado'}`);
-            const blob = new Blob([updatedReportText], {type: 'text/plain'}); 
-            const a = document.createElement('a'); 
-            a.href = URL.createObjectURL(blob); 
-            a.download = 'relatorio_compras.txt'; 
-            a.click(); 
+        openReportEdit: (reportId) => {
+            const report=state.reports.find(r=>r.id===reportId); if(!report)return;
+            state.editingReportId=reportId; ui.editReportLocation.value=report.location==='Não informado'?'':(report.location||''); ui.editReportNote.value=report.note||''; ui.reportEditItems.innerHTML='';
+            const items=reportItemsArray(report); const structured=items.length>0;
+            ui.reportEditItemsWrap.hidden=!structured; ui.reportEditLegacyNote.hidden=structured; ui.addReportItemBtn.hidden=!structured;
+            if(structured) items.forEach(appendReportEditItemRow); else ui.reportEditTotal.textContent=`Total original: R$ ${Number(report.total||0).toFixed(2)}`;
+            ui.reportEditModal.classList.add('visible');
         },
-        printReport: () => { 
-            const location = ui.purchaseLocationInput.value.trim();
-            const currentReportText = ui.reportPaper.textContent;
-            const updatedReportText = currentReportText.replace('*** CUPOM FISCAL ***', `*** CUPOM FISCAL ***\n\nLOCAL: ${location || 'Não informado'}`);
-            const win = window.open('', '_blank'); 
-            win.document.write(`<html><head><title>Relatório de Compra</title></head><body><pre>${updatedReportText}</pre></body></html>`); 
-            win.document.close(); 
-            win.print(); 
+        saveReportEdit: async () => {
+            const report=state.reports.find(r=>r.id===state.editingReportId); if(!report)return;
+            const location=ui.editReportLocation.value.trim()||'Não informado'; const note=ui.editReportNote.value.trim(); const oldItems=reportItemsArray(report); let items=oldItems; let total=Number(report.total||0);
+            if(oldItems.length){ items=[...ui.reportEditItems.querySelectorAll('.report-edit-row')].map((row)=>({nome:row.querySelector('[data-edit-name]').value.trim(),quantidade:Number(row.querySelector('[data-edit-qty]').value),preco:Number(row.querySelector('[data-edit-price]').value)})).filter((i)=>i.nome); if(!items.length){window.MercadorIA?.toast?.('O relatório precisa manter pelo menos um item.','warning');return;} if(items.some((i)=>!Number.isFinite(i.quantidade)||i.quantidade<=0||!Number.isFinite(i.preco)||i.preco<0)){window.MercadorIA?.toast?.('Revise quantidade e preço dos itens.','warning');return;} total=items.reduce((sum,i)=>sum+i.quantidade*i.preco,0); }
+            const changes=[]; if(location!==(report.location||'Não informado'))changes.push(`local: “${report.location||'Não informado'}” → “${location}”`); if(note!==(report.note||''))changes.push('observação alterada');
+            const oldSig=oldItems.map(i=>`${normalizeItemName(i.nome)}|${i.quantidade}|${i.preco}`).join(';'); const newSig=items.map(i=>`${normalizeItemName(i.nome)}|${i.quantidade}|${i.preco}`).join(';'); if(oldItems.length && oldSig!==newSig)changes.push(`itens/valores alterados; total R$ ${Number(report.total||0).toFixed(2)} → R$ ${total.toFixed(2)}`);
+            if(!changes.length){ui.reportEditModal.classList.remove('visible');window.MercadorIA?.toast?.('Nenhuma alteração para salvar.','warning');return;}
+            const editedAt=new Date().toISOString(); const editKey=reportsRef.child(report.id).child('editHistory').push().key; const content=oldItems.length?buildReportText({location,items,total,createdAt:report.createdAt,note}):legacyReportTextWithEdits(report,location,note);
+            const beforeSnapshot={location:report.location||'Não informado',note:report.note||'',total:Number(report.total||0)};
+            const afterSnapshot={location,note,total};
+            if(oldItems.length){ beforeSnapshot.items=oldItems.map(i=>({nome:i.nome,quantidade:i.quantidade,preco:i.preco})); afterSnapshot.items=items.map(i=>({nome:i.nome,quantidade:i.quantidade,preco:i.preco})); }
+            const updates={location,note,total,content,lastEditedAt:editedAt,lastEditedBy:userId,editCount:Number(report.editCount||Object.keys(report.editHistory||{}).length||0)+1}; if(oldItems.length)updates.items=items.map(i=>({...i,total:i.quantidade*i.preco})); updates[`editHistory/${editKey}`]={editedAt,actorUid:userId,action:'report_updated',summary:changes.join(' · '),changesCount:changes.length,before:beforeSnapshot,after:afterSnapshot};
+            ui.saveReportEditBtn.disabled=true; try{await reportsRef.child(report.id).update(updates);ui.reportEditModal.classList.remove('visible');ui.reportViewModal.classList.remove('visible');window.MercadorIA?.toast?.('Relatório atualizado. A edição ficou registrada no histórico.','success');}catch(error){console.error('Erro ao editar relatório:',error);window.MercadorIA?.toast?.('Não foi possível salvar a edição do relatório.','error',7000);}finally{ui.saveReportEditBtn.disabled=false;}
+        },
+        downloadReport: () => {
+            const updatedReportText = previewReportTextWithLocation();
+            const blob = new Blob([updatedReportText], {type: 'text/plain;charset=utf-8'});
+            const a = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            a.href = url;
+            a.download = `relatorio_compras_${new Date().toISOString().slice(0,10)}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        },
+        printReport: () => {
+            const updatedReportText = previewReportTextWithLocation();
+            const win = window.open('', '_blank');
+            if (!win) { window.MercadorIA?.toast?.('O navegador bloqueou a janela de impressão. Libere pop-ups e tente novamente.','warning'); return; }
+            const escaped = updatedReportText.replace(/[&<>]/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
+            win.document.write(`<html><head><meta charset="utf-8"><title>Relatório de Compra</title><style>body{font-family:ui-monospace,monospace;padding:24px;white-space:pre-wrap}pre{white-space:pre-wrap}</style></head><body><pre>${escaped}</pre></body></html>`);
+            win.document.close();
+            win.focus();
+            win.print();
         }
     };
     
     ui.form.addEventListener('submit', interactions.addItem);
+    ui.input.addEventListener('input', renderSmartSuggestions); ui.input.addEventListener('focus', renderSmartSuggestions);
+    ui.smartSuggestions?.addEventListener('click',(e)=>{const btn=e.target.closest('[data-smart-add]');if(btn)interactions.addItemByName(decodeURIComponent(btn.dataset.smartAdd));});
+    document.addEventListener('click',(e)=>{if(!e.target.closest('#form-adicionar-item,#smart-suggestions') && ui.smartSuggestions)ui.smartSuggestions.hidden=true;});
     ui.keypad.addEventListener('click', e => { if (e.target.tagName === 'BUTTON') calculator.handleInput(e.target.textContent, e.target.dataset.action); });
     ui.tabs.addEventListener('click', e => { if (e.target.tagName === 'BUTTON') interactions.handleTabClick(e.target.dataset.tab); });
-    document.getElementById('lista-relatorios').addEventListener('click', e => {
-        const deleteBtn = e.target.closest('.delete-report-btn');
-        if (deleteBtn) { interactions.deleteReport(deleteBtn.dataset.id); return; }
-        const reportRow = e.target.closest('.report-item');
-        if (reportRow) { interactions.showReport(reportRow.dataset.id); }
-    });
-    ui.appContainer.addEventListener('click', e => {
-        if (e.target.closest('.item-offer-action, .offer-sheet-overlay')) return;
-        const row = e.target.closest('.item-row'); if (!row) return;
-        const id = row.dataset.id;
-        const item = state.itens.find(i => i.id === id); if (!item) return;
-        if (e.target.closest('.delete-btn')) { interactions.deleteItem(id); } else { interactions.handleItemClick(id, item.status); }
-    });
+    document.getElementById('lista-relatorios').addEventListener('click', e => { const deleteBtn=e.target.closest('[data-delete-report]'); if(deleteBtn){interactions.deleteReport(deleteBtn.dataset.deleteReport);return;} const editBtn=e.target.closest('[data-edit-report]'); if(editBtn){interactions.openReportEdit(editBtn.dataset.editReport);return;} const reportRow=e.target.closest('.report-item'); if(reportRow)interactions.showReport(reportRow.dataset.id); });
+    ui.appContainer.addEventListener('click', e => { if(e.target.closest('.item-offer-action,.offer-sheet-overlay'))return; const row=e.target.closest('.item-row'); if(!row)return; const id=row.dataset.id; const item=state.itens.find(i=>i.id===id); if(!item)return; if(e.target.closest('[data-item-delete]')){interactions.deleteItem(id);return;} if(e.target.closest('[data-item-defer]')){interactions.updateItem(id,{status:'adiado'});if(state.activeItemId===id)state.activeItemId=null;return;} if(e.target.closest('[data-item-restore]')){interactions.updateItem(id,{status:'faltando',preco:0,quantidade:1});return;} if(e.target.closest('[data-item-select]')){interactions.selectItem(id);return;} if(item.status==='faltando' && e.target.closest('.item-details'))interactions.selectItem(id); });
     ui.btnFinalizar.addEventListener('click', interactions.openReportModal);
     ui.closeModalBtn.addEventListener('click', () => ui.reportModal.classList.remove('visible'));
     ui.closeViewModalBtn.addEventListener('click', () => ui.reportViewModal.classList.remove('visible'));
+    ui.editViewReportBtn.addEventListener('click',()=>{if(state.selectedReportId){ui.reportViewModal.classList.remove('visible');interactions.openReportEdit(state.selectedReportId);}});
+    ui.cancelReportEditBtn.addEventListener('click',()=>ui.reportEditModal.classList.remove('visible'));
+    ui.saveReportEditBtn.addEventListener('click',interactions.saveReportEdit);
+    ui.addReportItemBtn.addEventListener('click',()=>appendReportEditItemRow());
+    ui.reportEditItems.addEventListener('input',updateReportEditTotal);
+    ui.reportEditItems.addEventListener('click',(e)=>{const btn=e.target.closest('[data-remove-edit-item]');if(btn){btn.closest('.report-edit-row')?.remove();updateReportEditTotal();}});
     ui.downloadReportBtn.addEventListener('click', interactions.downloadReport);
     ui.printReportBtn.addEventListener('click', interactions.printReport);
     ui.finalizePurchaseBtn.addEventListener('click', interactions.finalizeAndReset);
@@ -708,6 +897,6 @@ window.addEventListener('appinstalled', () => {
     deferredPrompt = null;
 });
 </script>
-    <script src="./js/lista-promocoes.js?v=1.5.0"></script>
+    <script src="./js/lista-promocoes.js?v=2.4.0"></script>
 </body>
 </html>

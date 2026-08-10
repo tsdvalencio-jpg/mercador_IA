@@ -6,7 +6,7 @@
   const state = { users: {}, markets: {}, units: {}, promotions: {}, inbox: {}, audit: {}, profile: null, user: null, pdfImport: null };
 
   const byId = (id) => document.getElementById(id);
-  const entries = (obj) => Object.entries(obj || {}).map(([id, value]) => ({ id, ...(value || {}) }));
+  const entries = (obj) => Object.entries(obj || {}).map(([id, value]) => ({ ...(value || {}), id }));
   const activeNow = (promo) => {
     const now = Date.now();
     return promo.active === true && promo.verified === true && (!promo.startAt || Number(promo.startAt) <= now) && (!promo.endAt || Number(promo.endAt) >= now);
@@ -87,7 +87,7 @@
     const q = M.normalizeText(byId('unitSearch').value);
     const units = entries(state.units).filter((x) => !q || M.normalizeText(`${x.name} ${x.address} ${x.city} ${x.state} ${getMarket(x.marketId)?.name || ''}`).includes(q)).sort((a,b) => String(a.name).localeCompare(String(b.name)));
     byId('unitCountBadge').textContent = `${units.length} unidade${units.length === 1 ? '' : 's'}`;
-    byId('unitsList').innerHTML = units.length ? units.map((x) => `<article class="entity-card"><div class="entity-top"><div><div class="entity-title">${M.escapeHtml(x.name)}</div><div class="small muted">${M.escapeHtml(getMarket(x.marketId)?.name || 'Mercado não encontrado')} · ${M.escapeHtml(x.address || '')}, ${M.escapeHtml(x.city || '')}/${M.escapeHtml(x.state || '')}</div><div class="entity-meta"><span class="badge ${x.active ? 'ok':'danger'}">${x.active ? 'ativa':'inativa'}</span><span class="badge info">${Number(x.lat).toFixed(5)}, ${Number(x.lng).toFixed(5)}</span></div></div><div class="entity-actions"><a class="btn btn-ghost btn-sm" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${x.lat},${x.lng}`)}">Mapa</a><button type="button" class="btn btn-secondary btn-sm" data-unit-edit="${x.id}">Editar</button><button type="button" class="btn btn-sm ${x.active ? 'btn-danger':'btn-secondary'}" data-unit-toggle="${x.id}">${x.active ? 'Desativar':'Ativar'}</button></div></div></article>`).join('') : '<div class="empty">Nenhuma unidade cadastrada.</div>';
+    byId('unitsList').innerHTML = units.length ? units.map((x) => { const mapHref = x.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${x.lat},${x.lng}`)}`; const hasCoords = Number.isFinite(Number(x.lat)) && Number.isFinite(Number(x.lng)); return `<article class="entity-card"><div class="entity-top"><div><div class="entity-title">${M.escapeHtml(x.name)}</div><div class="small muted">${M.escapeHtml(getMarket(x.marketId)?.name || 'Mercado não encontrado')}${x.address ? ` · ${M.escapeHtml(x.address)}` : ''}${x.city ? ` · ${M.escapeHtml(x.city)}${x.state ? `/${M.escapeHtml(x.state)}` : ''}` : ''}</div><div class="entity-meta"><span class="badge ${x.active ? 'ok':'danger'}">${x.active ? 'ativa':'inativa'}</span><span class="badge ${hasCoords ? 'ok':'warn'}">${hasCoords ? '📍 GPS interno válido' : '⚠️ sem coordenadas'}</span>${x.mapsUrl ? '<span class="badge info">Google Maps vinculado</span>' : '<span class="badge">cadastro legado</span>'}</div></div><div class="entity-actions"><a class="btn btn-ghost btn-sm" target="_blank" rel="noopener" href="${M.escapeHtml(mapHref)}">Mapa</a><button type="button" class="btn btn-secondary btn-sm" data-unit-edit="${x.id}">Editar</button><button type="button" class="btn btn-sm ${x.active ? 'btn-danger':'btn-secondary'}" data-unit-toggle="${x.id}">${x.active ? 'Desativar':'Ativar'}</button></div></div></article>`; }).join('') : '<div class="empty">Nenhuma unidade cadastrada.</div>';
     refreshUnitSelects();
     refreshPdfImportUnitSelects();
   }
@@ -176,7 +176,7 @@
   }
 
   function resetMarketForm() { const f = byId('marketForm'); f.reset(); f.elements.id.value = ''; f.elements.active.checked = true; byId('marketModalTitle').textContent = 'Cadastrar mercado'; }
-  function resetUnitForm() { const f = byId('unitForm'); f.reset(); f.elements.id.value = ''; f.elements.active.checked = true; byId('unitModalTitle').textContent = 'Cadastrar unidade'; refreshMarketSelects(); }
+  function resetUnitForm() { const f = byId('unitForm'); f.reset(); f.elements.id.value = ''; f.elements.lat.value = ''; f.elements.lng.value = ''; f.elements.state.value = 'SP'; f.elements.active.checked = true; const status=byId('unitMapStatus'); if(status){status.className='map-link-status';status.textContent='Cole o link do local no Google Maps. Latitude e longitude ficam ocultas e são usadas apenas pelo cálculo de proximidade.';} byId('unitModalTitle').textContent = 'Cadastrar unidade'; refreshMarketSelects(); }
   function resetPromotionForm() {
     const f = byId('promotionForm'); f.reset(); f.elements.id.value = ''; f.elements.active.checked = true; f.elements.verified.checked = false; f.elements.priceKind.value = 'general'; byId('promotionModalTitle').textContent = 'Cadastrar promoção real';
     const now = new Date(); const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -217,13 +217,79 @@
     await db.ref(`markets/${id}`).update(value); await audit(f.elements.id.value ? 'market_updated':'market_created','market',id,{name:value.name}); M.closeModal('marketModal'); M.toast('Mercado salvo.', 'success');
   }
 
+  function decodeMapUrl(value) {
+    let text = String(value || '').trim();
+    for (let i = 0; i < 3; i += 1) {
+      try { const decoded = decodeURIComponent(text); if (decoded === text) break; text = decoded; } catch (_) { break; }
+    }
+    return text;
+  }
+
+  function validCoords(lat, lng) {
+    return Number.isFinite(lat) && lat >= -90 && lat <= 90 && Number.isFinite(lng) && lng >= -180 && lng <= 180;
+  }
+
+  function extractCoordinatesFromGoogleMapsUrl(rawUrl) {
+    const raw = String(rawUrl || '').trim();
+    if (!raw) return null;
+    let url;
+    try { url = new URL(raw); } catch (_) { return null; }
+    if (!/(^|\.)google\.[^/]+$|(^|\.)googleusercontent\.com$|(^|\.)goo\.gl$/.test(url.hostname) && url.hostname !== 'maps.app.goo.gl') return null;
+    const text = decodeMapUrl(raw);
+    const patterns = [
+      // Place Details embedded in a full Google Maps URL are preferred over
+      // the @lat,lng camera center because they identify the actual place marker.
+      /!3d(-?\d{1,3}(?:\.\d+)?)!4d(-?\d{1,3}(?:\.\d+)?)/i,
+      /@(-?\d{1,3}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)(?:,|z|\/|$)/i,
+      /[?&](?:q|query|center|destination|ll)=(-?\d{1,3}(?:\.\d+)?)[,%2C\s]+(-?\d{1,3}(?:\.\d+)?)(?:&|$)/i
+    ];
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (!match) continue;
+      const lat = Number(match[1]); const lng = Number(match[2]);
+      if (validCoords(lat, lng)) return { lat, lng };
+    }
+    try {
+      const parsed = new URL(raw);
+      for (const key of ['q','query','center','destination','ll']) {
+        const value = decodeMapUrl(parsed.searchParams.get(key) || '');
+        const match = value.match(/^\s*(-?\d{1,3}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
+        if (match) { const lat=Number(match[1]), lng=Number(match[2]); if (validCoords(lat,lng)) return {lat,lng}; }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function mapsUrlFromCoords(lat, lng) {
+    if (!validCoords(Number(lat), Number(lng))) return '';
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${Number(lat)},${Number(lng)}`)}`;
+  }
+
+  function applyUnitMapsLink({ quiet = false } = {}) {
+    const f = byId('unitForm'); const status = byId('unitMapStatus');
+    const raw = f.elements.mapsUrl.value.trim();
+    const coords = extractCoordinatesFromGoogleMapsUrl(raw);
+    if (!coords) {
+      if (status) { status.className='map-link-status warn'; status.textContent = raw.includes('maps.app.goo.gl') ? 'Esse é um link curto do Google Maps e ele não expõe as coordenadas no navegador. Abra o link, aguarde o local abrir no Google Maps pelo navegador e copie o endereço completo da barra, que contém a posição.' : 'Não encontrei coordenadas nesse URL. Use o link completo da página do local no Google Maps (normalmente contém @latitude,longitude ou query=latitude,longitude).'; }
+      if (!quiet) M.toast('Não foi possível extrair a posição desse link do Google Maps.', 'warning', 7000);
+      return null;
+    }
+    f.elements.lat.value = String(coords.lat);
+    f.elements.lng.value = String(coords.lng);
+    if (status) { status.className='map-link-status ok'; status.textContent = `✓ Localização lida com sucesso. Coordenadas internas: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}. Você não precisa digitá-las.`; }
+    return coords;
+  }
+
   async function saveUnit(event) {
     event.preventDefault(); const f = event.currentTarget; const id = f.elements.id.value || db.ref('market_units').push().key;
-    const lat = Number(f.elements.lat.value), lng = Number(f.elements.lng.value);
-    if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) { M.toast('Latitude ou longitude inválida.', 'warning'); return; }
-    const value = { marketId:f.elements.marketId.value, name:f.elements.name.value.trim(), address:f.elements.address.value.trim(), city:f.elements.city.value.trim(), state:f.elements.state.value.trim().toUpperCase(), lat, lng, active:f.elements.active.checked, updatedAt:serverTimestamp, updatedBy:state.user.uid };
+    const mapsUrl = f.elements.mapsUrl.value.trim();
+    const parsed = applyUnitMapsLink({ quiet: true });
+    const lat = Number(parsed ? parsed.lat : f.elements.lat.value), lng = Number(parsed ? parsed.lng : f.elements.lng.value);
+    if (!mapsUrl) { M.toast('Cole o link do Google Maps da unidade.', 'warning'); return; }
+    if (!validCoords(lat, lng)) { applyUnitMapsLink(); return; }
+    const value = { marketId:f.elements.marketId.value, name:f.elements.name.value.trim(), mapsUrl, address:f.elements.address.value.trim(), city:f.elements.city.value.trim(), state:(f.elements.state.value.trim() || 'SP').toUpperCase(), lat, lng, active:f.elements.active.checked, updatedAt:serverTimestamp, updatedBy:state.user.uid };
     if (!f.elements.id.value) { value.createdAt=serverTimestamp; value.createdBy=state.user.uid; }
-    await db.ref(`market_units/${id}`).update(value); await audit(f.elements.id.value ? 'unit_updated':'unit_created','market_unit',id,{name:value.name,marketId:value.marketId}); M.closeModal('unitModal'); M.toast('Unidade salva.', 'success');
+    await db.ref(`market_units/${id}`).update(value); await audit(f.elements.id.value ? 'unit_updated':'unit_created','market_unit',id,{name:value.name,marketId:value.marketId,mapsUrl:value.mapsUrl}); M.closeModal('unitModal'); M.toast('Unidade salva com localização do Google Maps.', 'success');
   }
 
   async function savePromotion(event) {
@@ -247,10 +313,10 @@
   }
 
   function populateMarketForm(id, trigger) { const x=state.markets[id]; if(!x)return; resetMarketForm(); const f=byId('marketForm'); Object.entries(x).forEach(([k,v])=>{ if(f.elements[k] && k!=='active') f.elements[k].value=v ?? ''; }); f.elements.id.value=id; f.elements.active.checked=x.active===true; byId('marketModalTitle').textContent='Editar mercado'; M.openModal('marketModal', { trigger }); }
-  function populateUnitForm(id, trigger) { const x=state.units[id]; if(!x)return; resetUnitForm(); const f=byId('unitForm'); ['marketId','name','address','city','state','lat','lng'].forEach((k)=>{ if(f.elements[k])f.elements[k].value=x[k] ?? '';}); f.elements.id.value=id; f.elements.active.checked=x.active===true; byId('unitModalTitle').textContent='Editar unidade'; M.openModal('unitModal', { trigger }); }
+  function populateUnitForm(id, trigger) { const x=state.units[id]; if(!x)return; resetUnitForm(); const f=byId('unitForm'); ['marketId','name','address','city','state','lat','lng'].forEach((k)=>{ if(f.elements[k])f.elements[k].value=x[k] ?? '';}); f.elements.mapsUrl.value=x.mapsUrl || mapsUrlFromCoords(x.lat,x.lng); f.elements.id.value=id; f.elements.active.checked=x.active===true; byId('unitModalTitle').textContent='Editar unidade'; applyUnitMapsLink({ quiet:true }); M.openModal('unitModal', { trigger }); }
   function populatePromotionForm(id, trigger) { const x=state.promotions[id]; if(!x)return; resetPromotionForm(); const f=byId('promotionForm'); ['marketId','productName','category','brand','packageText','price','previousPrice','sourceType','sourceReference','clubName','conditions','aliases'].forEach((k)=>{ if(f.elements[k])f.elements[k].value=x[k] ?? '';}); f.elements.priceKind.value=x.priceKind || (x.requiresClub ? 'club':'general'); refreshUnitSelects(); f.elements.unitId.value=x.unitId || ''; f.elements.startAt.value=M.toLocalDateTimeInput(x.startAt); f.elements.endAt.value=M.toLocalDateTimeInput(x.endAt); f.elements.id.value=id; f.elements.active.checked=x.active===true; f.elements.verified.checked=x.verified===true; byId('promotionModalTitle').textContent='Editar promoção'; M.openModal('promotionModal', { trigger }); }
 
-  async function toggle(path,id,field,current,action,type) { await db.ref(`${path}/${id}/${field}`).set(!current); await db.ref(`${path}/${id}/updatedAt`).set(serverTimestamp); await audit(action,type,id,{[field]:!current}); M.toast('Status atualizado.', 'success'); }
+  async function toggle(path,id,field,current,action,type) { if(!id || id === 'undefined' || id === 'null'){ M.toast('Não foi possível identificar o registro. Atualize a página e tente novamente.', 'error'); return; } try { await db.ref(`${path}/${id}`).update({ [field]: !current, updatedAt: serverTimestamp, updatedBy: state.user.uid }); await audit(action,type,id,{[field]:!current}); M.toast('Status atualizado.', 'success'); } catch(error) { console.error('[Mercador IA] Falha ao alterar status', {path,id,field,error}); M.toast(error?.code === 'PERMISSION_DENIED' || /permission/i.test(error?.message || '') ? 'O Firebase recusou essa alteração. Verifique sua permissão de administrador.' : 'Não foi possível atualizar o status.', 'error', 7000); } }
 
 
   function getPdfImport() {
@@ -872,7 +938,9 @@
     byId('promoMarketId').addEventListener('change', refreshUnitSelects);
     ['userSearch','marketSearch','unitSearch','promoSearch'].forEach((id)=>byId(id).addEventListener('input', ()=>({userSearch:renderUsers,marketSearch:renderMarkets,unitSearch:renderUnits,promoSearch:renderPromotions}[id])()));
     byId('promoFilter').addEventListener('change', renderPromotions);
-    byId('useMyLocationUnit').addEventListener('click', async()=>{ try{ const p=await M.getCurrentPosition(); const f=byId('unitForm'); f.elements.lat.value=p.coords.latitude.toFixed(7); f.elements.lng.value=p.coords.longitude.toFixed(7); M.toast(`Localização capturada com precisão aproximada de ${Math.round(p.coords.accuracy)} m.`, 'success'); }catch(e){M.toast(e.message,'error');} });
+    byId('parseUnitMapsLink')?.addEventListener('click', () => applyUnitMapsLink());
+    byId('unitMapsUrl')?.addEventListener('paste', () => setTimeout(() => applyUnitMapsLink({ quiet:true }), 30));
+    byId('unitMapsUrl')?.addEventListener('change', () => applyUnitMapsLink({ quiet:true }));
 
     document.addEventListener('click', async (event) => {
       const t=event.target.closest('button,a'); if(!t)return;
@@ -886,9 +954,9 @@
       if(t.dataset.marketEdit) { event.preventDefault(); event.stopPropagation(); populateMarketForm(t.dataset.marketEdit, t); return; }
       if(t.dataset.unitEdit) { event.preventDefault(); event.stopPropagation(); populateUnitForm(t.dataset.unitEdit, t); return; }
       if(t.dataset.promoEdit) { event.preventDefault(); event.stopPropagation(); populatePromotionForm(t.dataset.promoEdit, t); return; }
-      if(t.dataset.marketToggle){ const x=state.markets[t.dataset.marketToggle]; if(x) await toggle('markets',x.id,'active',x.active,'market_status_changed','market'); }
-      if(t.dataset.unitToggle){ const x=state.units[t.dataset.unitToggle]; if(x) await toggle('market_units',x.id,'active',x.active,'unit_status_changed','market_unit'); }
-      if(t.dataset.promoToggle){ const x=state.promotions[t.dataset.promoToggle]; if(x) await toggle('promotions',x.id,'active',x.active,'promotion_status_changed','promotion'); }
+      if(t.dataset.marketToggle){ event.preventDefault(); const id=t.dataset.marketToggle; const x=state.markets[id]; if(x) await toggle('markets',id,'active',x.active,'market_status_changed','market'); return; }
+      if(t.dataset.unitToggle){ event.preventDefault(); const id=t.dataset.unitToggle; const x=state.units[id]; if(x) await toggle('market_units',id,'active',x.active,'unit_status_changed','market_unit'); return; }
+      if(t.dataset.promoToggle){ event.preventDefault(); const id=t.dataset.promoToggle; const x=state.promotions[id]; if(x) await toggle('promotions',id,'active',x.active,'promotion_status_changed','promotion'); return; }
       if(t.dataset.inboxProcess){ await db.ref(`promotion_inbox/${t.dataset.inboxProcess}`).update({status:'processed',processedAt:serverTimestamp,processedBy:state.user.uid}); await audit('inbox_processed','promotion_inbox',t.dataset.inboxProcess); }
       if(t.dataset.inboxPromo){ const x=state.inbox[t.dataset.inboxPromo]; if(!x)return; resetPromotionForm(); const f=byId('promotionForm'); if(x.marketId){f.elements.marketId.value=x.marketId;refreshUnitSelects();} f.elements.sourceType.value=x.sourceType==='encarte'?'encarte':'whatsapp'; f.elements.sourceReference.value=`Inbox ${t.dataset.inboxPromo} · recebido em ${M.formatDateTime(x.createdAt)}`; f.elements.aliases.value=''; M.openModal('promotionModal', { trigger: t }); }
     });

@@ -72,3 +72,11 @@
   .pdf-workflow-actions .btn { width:100%; }
   .pdf-candidate-actions .btn { flex:1 1 100%; }
 }
+
+/* Mercador IA V2.4 — cadastro de unidade por link do Google Maps */
+.map-link-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.map-link-row .btn{min-height:44px;white-space:nowrap}
+.map-link-status{margin-top:7px;padding:9px 10px;border-radius:10px;background:rgba(47,128,237,.07);border:1px solid rgba(47,128,237,.16);font-size:.78rem;line-height:1.4;color:var(--muted)}
+.map-link-status.ok{background:rgba(47,179,89,.08);border-color:rgba(47,179,89,.22);color:#1a6c39;font-weight:700}
+.map-link-status.warn{background:rgba(244,166,35,.09);border-color:rgba(244,166,35,.24);color:#8b5700}
+@media(max-width:620px){.map-link-row{grid-template-columns:1fr}.map-link-row .btn{width:100%}}

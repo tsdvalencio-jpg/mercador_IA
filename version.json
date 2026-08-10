@@ -1,6 +1,6 @@
 {
   "name": "Mercador IA",
-  "version": "2.3.0",
-  "build": "mercador-ia-v2.3-controle-fila-revisao",
+  "version": "2.4.0",
+  "build": "mercador-ia-v2.4-fluxo-usuario-relatorio-editavel-maps-link",
   "date": "2026-08-10"
 }
