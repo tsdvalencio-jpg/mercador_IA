@@ -250,6 +250,21 @@
         .report-edit-remove{height:38px;border:0;border-radius:8px;background:#fff0ef;color:#b52e27;cursor:pointer}
         .report-edit-total{margin-top:10px;text-align:right;font-weight:850;color:#16883a}
         .report-legacy-note{padding:9px 10px;border-radius:9px;background:#fff7e8;color:#8b5900;font-size:.75rem;line-height:1.4;margin-top:10px}
+        .legacy-import-card{list-style:none;margin:0 0 12px;padding:12px;border:1px solid #cfe0ef;border-radius:12px;background:linear-gradient(135deg,#f7fbff,#eef7ff);box-shadow:0 3px 10px rgba(0,71,128,.06)}
+        .legacy-import-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+        .legacy-import-card strong{display:block;font-size:.92rem;color:#173b57}.legacy-import-card p{margin:4px 0 0;color:#60717e;font-size:.72rem;line-height:1.4}
+        .legacy-import-btn{border:0;border-radius:9px;background:#0879d9;color:#fff;min-height:40px;padding:8px 11px;font-weight:850;cursor:pointer;white-space:nowrap}
+        .legacy-import-btn:disabled{opacity:.6;cursor:wait}
+        .legacy-import-status{margin-top:10px;padding:9px 10px;border-radius:9px;background:#eef3f7;color:#53606b;font-size:.75rem;line-height:1.45}
+        .legacy-import-status.error{background:#fff0ef;color:#a1322b}.legacy-import-status.success{background:#eaf8ee;color:#1b7137}
+        .legacy-import-preview{display:grid;gap:7px;margin-top:10px;max-height:260px;overflow:auto}
+        .legacy-import-preview-row{padding:9px;border:1px solid #dde5eb;border-radius:9px;background:#fff;font-size:.75rem;line-height:1.35}
+        .legacy-import-preview-row strong{display:block;color:#263844}.legacy-import-preview-row span{color:#687681}
+        .legacy-import-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:10px}
+        .legacy-import-kpi{padding:8px;border-radius:9px;background:#edf2f6;text-align:center;font-size:.67rem;color:#67737d}.legacy-import-kpi strong{display:block;font-size:1rem;color:#253642}
+        .legacy-import-help{font-size:.7rem;line-height:1.45;color:#6b7882;margin:8px 0 0}
+        .legacy-import-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
+        .legacy-import-actions button{min-height:42px;border:0;border-radius:9px;padding:9px 12px;font-weight:800;cursor:pointer}.legacy-import-actions .secondary{background:#e8edf1;color:#3f4c56}.legacy-import-actions .primary{background:#1f9d55;color:#fff}
         .powered-user-footer{text-align:center;color:#aeb6bd;font-size:.66rem;padding:8px 0 0;line-height:1.25}
         .powered-user-footer strong{color:#e5eaee}
         .modal-content h3{margin-bottom:12px}
@@ -400,6 +415,28 @@
         </div>
     </div>
 
+    <div id="legacy-import-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="margin-top:0;">Importar histórico antigo</h3>
+            <p class="legacy-import-help" style="margin-top:-4px">Conecta somente durante esta importação ao Firebase da antiga Lista Inteligente. A senha não é salva no Mercador IA.</p>
+            <div id="legacy-import-login">
+                <div class="modal-field"><label for="legacy-import-email">E-mail da lista antiga</label><input id="legacy-import-email" type="email" autocomplete="username" placeholder="seu@email.com"></div>
+                <div class="modal-field"><label for="legacy-import-password">Senha da lista antiga</label><input id="legacy-import-password" type="password" autocomplete="current-password" placeholder="Senha"></div>
+                <p class="legacy-import-help">Use a conta que acessava o sistema antigo. A busca lê apenas <strong>purchase_reports</strong> desse usuário e não altera o banco antigo. Nos relatórios antigos, nomes de produtos podem estar abreviados porque aquela versão gravava somente os primeiros caracteres no cupom.</p>
+            </div>
+            <div id="legacy-import-result" hidden>
+                <div id="legacy-import-kpis" class="legacy-import-kpis"></div>
+                <div id="legacy-import-preview" class="legacy-import-preview"></div>
+            </div>
+            <div id="legacy-import-status" class="legacy-import-status">Informe o acesso da antiga Lista Inteligente para localizar as compras.</div>
+            <div class="legacy-import-actions">
+                <button id="legacy-import-cancel" type="button" class="secondary">Fechar</button>
+                <button id="legacy-import-search" type="button" class="secondary">Buscar histórico</button>
+                <button id="legacy-import-confirm" type="button" class="primary" hidden>Importar compras</button>
+            </div>
+        </div>
+    </div>
+
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -448,6 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dirtyLists: new Set(['faltando','comprados','adiados']),
         tabScroll: { faltando:0, comprados:0, adiados:0, relatorios:0 },
         syncTimer: null,
+        legacyImport: { sourceUid:null, found:0, duplicates:0, pending:[], imported:0 },
         ui: { isCalculatorCollapsed: true },
     };
 
@@ -486,6 +524,17 @@ document.addEventListener('DOMContentLoaded', () => {
         addReportItemBtn: document.getElementById('add-report-item-btn'),
         cancelReportEditBtn: document.getElementById('cancel-report-edit-btn'),
         saveReportEditBtn: document.getElementById('save-report-edit-btn'),
+        legacyImportModal: document.getElementById('legacy-import-modal'),
+        legacyImportLogin: document.getElementById('legacy-import-login'),
+        legacyImportEmail: document.getElementById('legacy-import-email'),
+        legacyImportPassword: document.getElementById('legacy-import-password'),
+        legacyImportResult: document.getElementById('legacy-import-result'),
+        legacyImportKpis: document.getElementById('legacy-import-kpis'),
+        legacyImportPreview: document.getElementById('legacy-import-preview'),
+        legacyImportStatus: document.getElementById('legacy-import-status'),
+        legacyImportCancel: document.getElementById('legacy-import-cancel'),
+        legacyImportSearch: document.getElementById('legacy-import-search'),
+        legacyImportConfirm: document.getElementById('legacy-import-confirm'),
         smartSuggestions: document.getElementById('smart-suggestions'),
         purchaseLocationOptions: document.getElementById('purchase-location-options'),
     };
@@ -624,6 +673,175 @@ document.addEventListener('DOMContentLoaded', () => {
         return text;
     };
 
+    const LEGACY_FIREBASE = Object.freeze({
+        apiKey: 'AIzaSyA9WEvRwaDuEDFlTlIwPxKvNr6hcNlYFbI',
+        databaseURL: 'https://thiaguinho-solucoes-default-rtdb.firebaseio.com',
+        projectId: 'thiaguinho-solucoes',
+        sourceSystem: 'thIAguinho_Solucoes_IA'
+    });
+
+    const legacyPushTimestamp = (key) => {
+        const chars='-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
+        const head=String(key || '').slice(0,8); if(head.length!==8)return 0;
+        let value=0;
+        for(const ch of head){const idx=chars.indexOf(ch);if(idx<0)return 0;value=value*64+idx;}
+        return value;
+    };
+
+    const parsePtBrDateTime = (value) => {
+        const text=String(value || '').trim();
+        const match=text.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:,?\s+|\s*)(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+        if(!match)return null;
+        const dt=new Date(Number(match[3]),Number(match[2])-1,Number(match[1]),Number(match[4]),Number(match[5]),Number(match[6]||0));
+        return Number.isNaN(dt.getTime())?null:dt;
+    };
+
+    const legacyNumber = (value) => {
+        if(typeof value==='number')return Number.isFinite(value)?value:0;
+        let text=String(value ?? '').trim().replace(/R\$/gi,'').replace(/\s/g,'');
+        if(text.includes(',') && text.includes('.')) text=text.replace(/\./g,'').replace(',','.');
+        else text=text.replace(',','.');
+        const n=Number(text); return Number.isFinite(n)?n:0;
+    };
+
+    const parseLegacyReportContent = (content) => {
+        const text=String(content || '').replace(/\r/g,'');
+        const locationMatch=text.match(/^LOCAL:\s*(.+)$/mi);
+        const dateMatch=text.match(/^DATA:\s*(.+)$/mi);
+        const totalMatch=text.match(/TOTAL\s+A\s+PAGAR:\s*R\$?\s*([\d.,]+)/i);
+        const items=[];
+        text.split('\n').forEach((line)=>{
+            const clean=line.trim();
+            if(!clean || /^(ITEM|TOTAL|LOCAL|DATA|[-*]{3,}|Powered\b)/i.test(clean))return;
+            const match=clean.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*=\s*(\d+(?:[.,]\d+)?)\s*$/i);
+            if(!match)return;
+            const nome=String(match[1] || '').trim(); const quantidade=legacyNumber(match[2]); const preco=legacyNumber(match[3]); const total=legacyNumber(match[4]);
+            if(nome && quantidade>0 && preco>=0)items.push({nome,quantidade,preco,total:Number.isFinite(total)?total:quantidade*preco});
+        });
+        return { location:locationMatch?.[1]?.trim() || '', dateText:dateMatch?.[1]?.trim() || '', total:totalMatch?legacyNumber(totalMatch[1]):0, items };
+    };
+
+    const normalizeLegacyReport = (legacyId, raw, sourceUid) => {
+        const source=raw && typeof raw==='object'?raw:{}; const parsed=parseLegacyReportContent(source.content);
+        const location=String(source.location || parsed.location || 'Não informado').trim().slice(0,160) || 'Não informado';
+        let createdAt=String(source.createdAt || '').trim(); let date=new Date(createdAt);
+        if(!createdAt || Number.isNaN(date.getTime())){date=parsePtBrDateTime(parsed.dateText) || new Date(legacyPushTimestamp(legacyId) || Date.now());createdAt=date.toISOString();}
+        const items=parsed.items; let total=legacyNumber(source.total); if(!(total>=0))total=0; if(!total && parsed.total)total=parsed.total; if(!total && items.length)total=items.reduce((sum,i)=>sum+(i.total||i.quantidade*i.preco),0);
+        const baseContent=String(source.content || '').trim();
+        const content=baseContent?legacyReportTextWithEdits({content:baseContent},location,''):buildReportText({location,items,total,createdAt,note:''});
+        const report={
+            content, location, total:Number(total||0), createdAt, purchaseAt:createdAt, note:'', editCount:0,
+            sourceType:'legacy_firebase_import', sourceSystem:LEGACY_FIREBASE.sourceSystem, legacyProjectId:LEGACY_FIREBASE.projectId,
+            legacyUserUid:sourceUid, legacyReportId:legacyId, importedAt:new Date().toISOString(), formatVersion:items.length?2:1
+        };
+        if(items.length){report.items=items.map(i=>({nome:i.nome,quantidade:i.quantidade,preco:i.preco,total:i.total||i.quantidade*i.preco}));report.legacyItemNamesMayBeTruncated=true;}
+        return report;
+    };
+
+    const legacyHash = (value) => {
+        let hash=2166136261;
+        for(const ch of String(value || '')){hash^=ch.charCodeAt(0);hash=Math.imul(hash,16777619);}
+        return (hash>>>0).toString(36);
+    };
+
+    const legacyStatus = (message, type='') => {
+        if(!ui.legacyImportStatus)return;
+        ui.legacyImportStatus.className=`legacy-import-status${type?` ${type}`:''}`;
+        ui.legacyImportStatus.textContent=message;
+    };
+
+    const resetLegacyImport = () => {
+        state.legacyImport={sourceUid:null,found:0,duplicates:0,pending:[],imported:0};
+        ui.legacyImportPassword.value=''; ui.legacyImportLogin.hidden=false; ui.legacyImportResult.hidden=true; ui.legacyImportConfirm.hidden=true;
+        ui.legacyImportSearch.hidden=false; ui.legacyImportSearch.disabled=false; ui.legacyImportConfirm.disabled=false;
+        ui.legacyImportPreview.replaceChildren(); ui.legacyImportKpis.replaceChildren();
+        legacyStatus('Informe o acesso da antiga Lista Inteligente para localizar as compras.');
+    };
+
+    const openLegacyImport = () => {
+        resetLegacyImport();
+        ui.legacyImportEmail.value=auth.currentUser?.email || '';
+        ui.legacyImportModal.classList.add('visible');
+        setTimeout(()=>{(ui.legacyImportEmail.value?ui.legacyImportPassword:ui.legacyImportEmail)?.focus?.();},80);
+    };
+
+    const renderLegacyImportPreview = () => {
+        const data=state.legacyImport;
+        ui.legacyImportKpis.innerHTML=`<div class="legacy-import-kpi"><strong>${data.found}</strong>encontradas</div><div class="legacy-import-kpi"><strong>${data.duplicates}</strong>já importadas</div><div class="legacy-import-kpi"><strong>${data.pending.length}</strong>novas</div>`;
+        const fragment=document.createDocumentFragment();
+        data.pending.slice().sort((a,b)=>new Date(b.report.createdAt)-new Date(a.report.createdAt)).slice(0,8).forEach(({report})=>{
+            const row=document.createElement('div');row.className='legacy-import-preview-row';
+            const safeLocation=window.MercadorIA?.escapeHtml?window.MercadorIA.escapeHtml(report.location || 'Não informado'):String(report.location || 'Não informado');
+            row.innerHTML=`<strong>${safeLocation}</strong><span>${new Date(report.createdAt).toLocaleString('pt-BR')} · R$ ${Number(report.total||0).toFixed(2)}${report.items?.length?` · ${report.items.length} item(ns) recuperado(s)`:''}</span>`;
+            fragment.appendChild(row);
+        });
+        if(data.pending.length>8){const row=document.createElement('div');row.className='legacy-import-preview-row';row.textContent=`+ ${data.pending.length-8} compras adicionais prontas para importar.`;fragment.appendChild(row);}
+        ui.legacyImportPreview.replaceChildren(fragment); ui.legacyImportResult.hidden=false;
+        ui.legacyImportConfirm.hidden=!data.pending.length; ui.legacyImportConfirm.textContent=data.pending.length?`Importar ${data.pending.length} compra${data.pending.length===1?'':'s'}`:'Nada novo para importar';
+    };
+
+    const legacyAuthErrorMessage = (code) => {
+        const c=String(code || '');
+        if(c.includes('INVALID_LOGIN_CREDENTIALS')||c.includes('EMAIL_NOT_FOUND')||c.includes('INVALID_PASSWORD'))return 'E-mail ou senha da lista antiga não conferem.';
+        if(c.includes('TOO_MANY_ATTEMPTS'))return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+        if(c.includes('USER_DISABLED'))return 'Essa conta antiga está desativada.';
+        return 'Não foi possível autenticar na lista antiga.';
+    };
+
+    const searchLegacyHistory = async () => {
+        const email=ui.legacyImportEmail.value.trim(); const password=ui.legacyImportPassword.value;
+        if(!email || !password){legacyStatus('Informe o e-mail e a senha usados na lista antiga.','error');return;}
+        ui.legacyImportSearch.disabled=true; ui.legacyImportConfirm.hidden=true; legacyStatus('Conectando ao sistema antigo e localizando seus relatórios…');
+        try{
+            const authResponse=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(LEGACY_FIREBASE.apiKey)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password,returnSecureToken:true}),cache:'no-store'});
+            const authData=await authResponse.json().catch(()=>({}));
+            if(!authResponse.ok || !authData.idToken || !authData.localId)throw new Error(legacyAuthErrorMessage(authData?.error?.message));
+            ui.legacyImportPassword.value='';
+            legacyStatus('Conta antiga localizada. Lendo somente o histórico de compras…');
+            const reportsResponse=await fetch(`${LEGACY_FIREBASE.databaseURL}/purchase_reports/${encodeURIComponent(authData.localId)}.json?auth=${encodeURIComponent(authData.idToken)}`,{cache:'no-store'});
+            const legacyData=await reportsResponse.json().catch(()=>null);
+            if(!reportsResponse.ok || (legacyData && typeof legacyData==='object' && legacyData.error))throw new Error('O Firebase antigo não permitiu ler esse histórico. Confirme se é a mesma conta usada na lista antiga.');
+            const sourceRows=legacyData && typeof legacyData==='object'?Object.entries(legacyData):[];
+            const currentSnap=await reportsRef.once('value'); const current=currentSnap.val() || {};
+            const importedIds=new Set(Object.values(current).filter((r)=>r && r.sourceType==='legacy_firebase_import' && r.legacyProjectId===LEGACY_FIREBASE.projectId && r.legacyReportId).map((r)=>String(r.legacyReportId)));
+            const pending=[]; let duplicates=0;
+            for(const [legacyId,raw] of sourceRows){
+                if(importedIds.has(String(legacyId))){duplicates++;continue;}
+                let targetKey=String(legacyId);
+                if(current[targetKey]){
+                    const fallback=`legacy_${legacyHash(`${authData.localId}:${legacyId}`)}`;
+                    if(current[fallback] && current[fallback].sourceType==='legacy_firebase_import' && current[fallback].legacyReportId===legacyId){duplicates++;continue;}
+                    targetKey=fallback;
+                }
+                pending.push({legacyId,targetKey,report:normalizeLegacyReport(legacyId,raw,authData.localId)});
+            }
+            state.legacyImport={sourceUid:authData.localId,found:sourceRows.length,duplicates,pending,imported:0};
+            ui.legacyImportLogin.hidden=true; ui.legacyImportSearch.hidden=true; renderLegacyImportPreview();
+            legacyStatus(pending.length?`${pending.length} compra${pending.length===1?'':'s'} pronta${pending.length===1?'':'s'} para importar. Nada foi gravado ainda.`:`O histórico antigo já está importado. Nenhuma compra nova foi encontrada.`,pending.length?'success':'');
+        }catch(error){console.error('Falha ao buscar histórico antigo:',error);legacyStatus(error.message || 'Não foi possível buscar o histórico antigo.','error');}
+        finally{ui.legacyImportSearch.disabled=false;}
+    };
+
+    const importLegacyHistory = async () => {
+        const rows=state.legacyImport.pending || []; if(!rows.length)return;
+        ui.legacyImportConfirm.disabled=true; ui.legacyImportSearch.disabled=true;
+        let imported=0;
+        try{
+            for(let start=0;start<rows.length;start+=75){
+                const chunk=rows.slice(start,start+75); const updates={};
+                chunk.forEach(({targetKey,report})=>{updates[`purchase_reports/${userId}/${targetKey}`]=report;});
+                legacyStatus(`Importando ${Math.min(start+chunk.length,rows.length)} de ${rows.length} compras…`);
+                await database.ref().update(updates); imported+=chunk.length;
+            }
+            state.legacyImport.imported=imported; state.legacyImport.pending=[]; state.legacyImport.duplicates+=imported;
+            legacyStatus(`${imported} compra${imported===1?'':'s'} importada${imported===1?'':'s'} com sucesso. O histórico antigo continua preservado no sistema de origem.`, 'success');
+            ui.legacyImportConfirm.hidden=true; ui.legacyImportCancel.textContent='Concluir';
+            state.reportsLoaded=false; state.reportsLoadedAt=0; await loadRecentReports({force:true,silent:true});
+            window.MercadorIA?.toast?.(`${imported} compra${imported===1?'':'s'} importada${imported===1?'':'s'} do histórico antigo.`,'success',6000);
+        }catch(error){console.error('Falha ao importar histórico antigo:',error);legacyStatus(`A importação parou após ${imported} compra${imported===1?'':'s'}. Você pode tentar novamente; as já importadas não serão duplicadas.`,'error');state.legacyImport.pending=rows.slice(imported);renderLegacyImportPreview();}
+        finally{ui.legacyImportConfirm.disabled=false;ui.legacyImportSearch.disabled=false;}
+    };
+
     const previewReportTextWithLocation = () => {
         const location = ui.purchaseLocationInput.value.trim() || 'Não informado';
         let text = String(ui.reportPaper.textContent || '');
@@ -740,11 +958,15 @@ document.addEventListener('DOMContentLoaded', () => {
         reports: () => {
             const listEl = document.getElementById('lista-relatorios');
             if (!listEl) return;
+            const fragment = document.createDocumentFragment();
+            const importCard=document.createElement('li'); importCard.className='legacy-import-card';
+            importCard.innerHTML=`<div class="legacy-import-card-head"><div><strong>📥 Importar histórico da lista antiga</strong><p>Recupere suas compras diretamente do Firebase da antiga Lista Inteligente, sem foto e sem redigitar.</p></div><button type="button" class="legacy-import-btn" data-open-legacy-import>Importar</button></div>`;
+            fragment.appendChild(importCard);
             if (state.reportsLoading && !state.reports.length) {
-                listEl.innerHTML = `<div class="light-loading"><span></span><span>Carregando relatórios recentes…</span></div>`;
+                const loading=document.createElement('div'); loading.className='light-loading'; loading.innerHTML='<span></span><span>Carregando relatórios recentes…</span>'; fragment.appendChild(loading);
+                listEl.replaceChildren(fragment);
                 return;
             }
-            const fragment = document.createDocumentFragment();
             if (state.reports.length === 0) {
                 const p = document.createElement('p'); p.style.cssText='text-align:center;padding:20px'; p.textContent='Nenhum relatório salvo.'; fragment.appendChild(p);
             } else {
@@ -1133,7 +1355,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click',(e)=>{if(!e.target.closest('#form-adicionar-item,#smart-suggestions') && ui.smartSuggestions)ui.smartSuggestions.hidden=true;});
     ui.keypad.addEventListener('click', e => { if (e.target.tagName === 'BUTTON') calculator.handleInput(e.target.textContent, e.target.dataset.action); });
     ui.tabs.addEventListener('click', e => { const btn=e.target.closest('.tab-btn'); if(btn) interactions.handleTabClick(btn.dataset.tab); });
-    document.getElementById('lista-relatorios').addEventListener('click', e => { const moreBtn=e.target.closest('[data-load-more-reports]'); if(moreBtn){loadMoreReports();return;} const deleteBtn=e.target.closest('[data-delete-report]'); if(deleteBtn){interactions.deleteReport(deleteBtn.dataset.deleteReport);return;} const editBtn=e.target.closest('[data-edit-report]'); if(editBtn){interactions.openReportEdit(editBtn.dataset.editReport);return;} const reportRow=e.target.closest('.report-item'); if(reportRow)interactions.showReport(reportRow.dataset.id); });
+    document.getElementById('lista-relatorios').addEventListener('click', e => { const importBtn=e.target.closest('[data-open-legacy-import]'); if(importBtn){openLegacyImport();return;} const moreBtn=e.target.closest('[data-load-more-reports]'); if(moreBtn){loadMoreReports();return;} const deleteBtn=e.target.closest('[data-delete-report]'); if(deleteBtn){interactions.deleteReport(deleteBtn.dataset.deleteReport);return;} const editBtn=e.target.closest('[data-edit-report]'); if(editBtn){interactions.openReportEdit(editBtn.dataset.editReport);return;} const reportRow=e.target.closest('.report-item'); if(reportRow)interactions.showReport(reportRow.dataset.id); });
     ui.appContainer.addEventListener('click', e => { if(e.target.closest('.item-offer-action,.offer-sheet-overlay'))return; const row=e.target.closest('.item-row'); if(!row)return; const id=row.dataset.id; const item=state.itens.find(i=>i.id===id); if(!item)return; if(e.target.closest('[data-item-delete]')){interactions.deleteItem(id);return;} if(e.target.closest('[data-item-defer]')){interactions.updateItem(id,{status:'adiado'});if(state.activeItemId===id)state.activeItemId=null;return;} if(e.target.closest('[data-item-restore]')){interactions.updateItem(id,{status:'faltando',preco:0,quantidade:1});return;} if(e.target.closest('[data-item-select]')){interactions.selectItem(id);return;} if(item.status==='faltando' && e.target.closest('.item-details'))interactions.selectItem(id); });
     ui.btnFinalizar.addEventListener('click', interactions.openReportModal);
     ui.closeModalBtn.addEventListener('click', () => ui.reportModal.classList.remove('visible'));
@@ -1144,6 +1366,10 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.addReportItemBtn.addEventListener('click',()=>appendReportEditItemRow());
     ui.reportEditItems.addEventListener('input',updateReportEditTotal);
     ui.reportEditItems.addEventListener('click',(e)=>{const btn=e.target.closest('[data-remove-edit-item]');if(btn){btn.closest('.report-edit-row')?.remove();updateReportEditTotal();}});
+    ui.legacyImportCancel.addEventListener('click',()=>ui.legacyImportModal.classList.remove('visible'));
+    ui.legacyImportSearch.addEventListener('click',searchLegacyHistory);
+    ui.legacyImportConfirm.addEventListener('click',importLegacyHistory);
+    ui.legacyImportPassword.addEventListener('keydown',(e)=>{if(e.key==='Enter'){e.preventDefault();searchLegacyHistory();}});
     ui.downloadReportBtn.addEventListener('click', interactions.downloadReport);
     ui.printReportBtn.addEventListener('click', interactions.printReport);
     ui.finalizePurchaseBtn.addEventListener('click', interactions.finalizeAndReset);
