@@ -78,7 +78,7 @@
     byId('marketCountBadge').textContent = `${markets.length} mercado${markets.length === 1 ? '' : 's'}`;
     byId('marketsList').innerHTML = markets.length ? markets.map((x) => {
       const unitCount = entries(state.units).filter((u) => u.marketId === x.id).length;
-      return `<article class="entity-card"><div class="entity-top"><div><div class="entity-title">${M.escapeHtml(x.name)}</div><div class="small muted">${M.escapeHtml(x.legalName || x.cnpj || 'Cadastro comercial')}</div><div class="entity-meta"><span class="badge ${x.active ? 'ok':'danger'}">${x.active ? 'ativo':'inativo'}</span><span class="badge info">${unitCount} unidade${unitCount === 1 ? '' : 's'}</span>${x.contact ? `<span class="badge">${M.escapeHtml(x.contact)}</span>`:''}</div></div><div class="entity-actions"><button class="btn btn-secondary btn-sm" data-market-edit="${x.id}">Editar</button><button class="btn btn-sm ${x.active ? 'btn-danger':'btn-secondary'}" data-market-toggle="${x.id}">${x.active ? 'Desativar':'Ativar'}</button></div></div></article>`;
+      return `<article class="entity-card"><div class="entity-top"><div><div class="entity-title">${M.escapeHtml(x.name)}</div><div class="small muted">${M.escapeHtml(x.legalName || x.cnpj || 'Cadastro comercial')}</div><div class="entity-meta"><span class="badge ${x.active ? 'ok':'danger'}">${x.active ? 'ativo':'inativo'}</span><span class="badge info">${unitCount} unidade${unitCount === 1 ? '' : 's'}</span>${x.contact ? `<span class="badge">${M.escapeHtml(x.contact)}</span>`:''}</div></div><div class="entity-actions"><button type="button" class="btn btn-secondary btn-sm" data-market-edit="${x.id}">Editar</button><button type="button" class="btn btn-sm ${x.active ? 'btn-danger':'btn-secondary'}" data-market-toggle="${x.id}">${x.active ? 'Desativar':'Ativar'}</button></div></div></article>`;
     }).join('') : '<div class="empty">Nenhum mercado cadastrado.</div>';
     refreshMarketSelects();
   }
@@ -87,7 +87,7 @@
     const q = M.normalizeText(byId('unitSearch').value);
     const units = entries(state.units).filter((x) => !q || M.normalizeText(`${x.name} ${x.address} ${x.city} ${x.state} ${getMarket(x.marketId)?.name || ''}`).includes(q)).sort((a,b) => String(a.name).localeCompare(String(b.name)));
     byId('unitCountBadge').textContent = `${units.length} unidade${units.length === 1 ? '' : 's'}`;
-    byId('unitsList').innerHTML = units.length ? units.map((x) => `<article class="entity-card"><div class="entity-top"><div><div class="entity-title">${M.escapeHtml(x.name)}</div><div class="small muted">${M.escapeHtml(getMarket(x.marketId)?.name || 'Mercado não encontrado')} · ${M.escapeHtml(x.address || '')}, ${M.escapeHtml(x.city || '')}/${M.escapeHtml(x.state || '')}</div><div class="entity-meta"><span class="badge ${x.active ? 'ok':'danger'}">${x.active ? 'ativa':'inativa'}</span><span class="badge info">${Number(x.lat).toFixed(5)}, ${Number(x.lng).toFixed(5)}</span></div></div><div class="entity-actions"><a class="btn btn-ghost btn-sm" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${x.lat},${x.lng}`)}">Mapa</a><button class="btn btn-secondary btn-sm" data-unit-edit="${x.id}">Editar</button><button class="btn btn-sm ${x.active ? 'btn-danger':'btn-secondary'}" data-unit-toggle="${x.id}">${x.active ? 'Desativar':'Ativar'}</button></div></div></article>`).join('') : '<div class="empty">Nenhuma unidade cadastrada.</div>';
+    byId('unitsList').innerHTML = units.length ? units.map((x) => `<article class="entity-card"><div class="entity-top"><div><div class="entity-title">${M.escapeHtml(x.name)}</div><div class="small muted">${M.escapeHtml(getMarket(x.marketId)?.name || 'Mercado não encontrado')} · ${M.escapeHtml(x.address || '')}, ${M.escapeHtml(x.city || '')}/${M.escapeHtml(x.state || '')}</div><div class="entity-meta"><span class="badge ${x.active ? 'ok':'danger'}">${x.active ? 'ativa':'inativa'}</span><span class="badge info">${Number(x.lat).toFixed(5)}, ${Number(x.lng).toFixed(5)}</span></div></div><div class="entity-actions"><a class="btn btn-ghost btn-sm" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${x.lat},${x.lng}`)}">Mapa</a><button type="button" class="btn btn-secondary btn-sm" data-unit-edit="${x.id}">Editar</button><button type="button" class="btn btn-sm ${x.active ? 'btn-danger':'btn-secondary'}" data-unit-toggle="${x.id}">${x.active ? 'Desativar':'Ativar'}</button></div></div></article>`).join('') : '<div class="empty">Nenhuma unidade cadastrada.</div>';
     refreshUnitSelects();
     refreshPdfImportUnitSelects();
   }
@@ -106,7 +106,7 @@
       const unit = getUnit(p.unitId);
       const saving = Number(p.previousPrice) > Number(p.price) ? Number(p.previousPrice) - Number(p.price) : 0;
       const valid = activeNow(p);
-      return `<article class="entity-card"><div class="entity-top"><div><div class="entity-title">${M.escapeHtml(p.productName)}</div><div class="small muted">${M.escapeHtml(market?.name || 'Mercado')} · ${M.escapeHtml(unit?.name || 'Unidade')}</div><div class="entity-meta"><span class="badge ${valid ? 'ok':(p.active ? 'warn':'danger')}">${valid ? 'válida agora':(p.active ? 'fora da validade':'inativa')}</span><span class="badge ${p.verified ? 'ok':'warn'}">${p.verified ? 'valor conferido':'não conferida'}</span><span class="badge info">${M.formatCurrency(p.price)}</span>${p.requiresClub ? `<span class="badge warn">💳 ${M.escapeHtml(p.clubName || 'Preço Clube')}</span>`:''}${saving > 0 ? `<span class="badge ok">economia ${M.formatCurrency(saving)}</span>`:''}<span class="badge">até ${M.formatDateTime(p.endAt)}</span></div><div class="small muted" style="margin-top:9px">Origem: ${M.escapeHtml(p.sourceType || '—')} · ${M.escapeHtml(p.sourceReference || 'sem referência')}</div>${p.conditions ? `<div class="small muted" style="margin-top:6px">Condições: ${M.escapeHtml(p.conditions)}</div>`:''}</div><div class="entity-actions"><button class="btn btn-secondary btn-sm" data-promo-edit="${p.id}">Editar</button><button class="btn btn-sm ${p.active ? 'btn-danger':'btn-secondary'}" data-promo-toggle="${p.id}">${p.active ? 'Desativar':'Ativar'}</button></div></div></article>`;
+      return `<article class="entity-card"><div class="entity-top"><div><div class="entity-title">${M.escapeHtml(p.productName)}</div><div class="small muted">${M.escapeHtml(market?.name || 'Mercado')} · ${M.escapeHtml(unit?.name || 'Unidade')}</div><div class="entity-meta"><span class="badge ${valid ? 'ok':(p.active ? 'warn':'danger')}">${valid ? 'válida agora':(p.active ? 'fora da validade':'inativa')}</span><span class="badge ${p.verified ? 'ok':'warn'}">${p.verified ? 'valor conferido':'não conferida'}</span><span class="badge info">${M.formatCurrency(p.price)}</span>${p.requiresClub ? `<span class="badge warn">💳 ${M.escapeHtml(p.clubName || 'Preço Clube')}</span>`:''}${saving > 0 ? `<span class="badge ok">economia ${M.formatCurrency(saving)}</span>`:''}<span class="badge">até ${M.formatDateTime(p.endAt)}</span></div><div class="small muted" style="margin-top:9px">Origem: ${M.escapeHtml(p.sourceType || '—')} · ${M.escapeHtml(p.sourceReference || 'sem referência')}</div>${p.conditions ? `<div class="small muted" style="margin-top:6px">Condições: ${M.escapeHtml(p.conditions)}</div>`:''}</div><div class="entity-actions"><button type="button" class="btn btn-secondary btn-sm" data-promo-edit="${p.id}">Editar</button><button type="button" class="btn btn-sm ${p.active ? 'btn-danger':'btn-secondary'}" data-promo-toggle="${p.id}">${p.active ? 'Desativar':'Ativar'}</button></div></div></article>`;
     }).join('') : '<div class="empty">Nenhuma promoção encontrada.</div>';
   }
 
@@ -162,14 +162,16 @@
 
   function bindNavigation() {
     document.querySelectorAll('[data-section]').forEach((button) => button.addEventListener('click', () => navigate(button.dataset.section)));
-    document.querySelectorAll('[data-open-modal]').forEach((button) => button.addEventListener('click', () => {
+    document.querySelectorAll('[data-open-modal]').forEach((button) => button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
       const id = button.dataset.openModal;
       if (id === 'marketModal') resetMarketForm();
       if (id === 'unitModal') resetUnitForm();
       if (id === 'promotionModal') resetPromotionForm();
       if (id === 'userModal') byId('userForm').reset();
       if (id === 'inboxModal') byId('inboxForm').reset();
-      M.openModal(id);
+      M.openModal(id, { trigger: button });
     }));
   }
 
@@ -244,9 +246,9 @@
     await ref.set(value); await audit('inbox_received','promotion_inbox',ref.key,{marketId:value.marketId,sourceType:value.sourceType}); M.closeModal('inboxModal'); f.reset(); M.toast('Recebimento registrado para revisão.', 'success');
   }
 
-  function populateMarketForm(id) { const x=state.markets[id]; if(!x)return; resetMarketForm(); const f=byId('marketForm'); Object.entries(x).forEach(([k,v])=>{ if(f.elements[k] && k!=='active') f.elements[k].value=v ?? ''; }); f.elements.id.value=id; f.elements.active.checked=x.active===true; byId('marketModalTitle').textContent='Editar mercado'; M.openModal('marketModal'); }
-  function populateUnitForm(id) { const x=state.units[id]; if(!x)return; resetUnitForm(); const f=byId('unitForm'); ['marketId','name','address','city','state','lat','lng'].forEach((k)=>{ if(f.elements[k])f.elements[k].value=x[k] ?? '';}); f.elements.id.value=id; f.elements.active.checked=x.active===true; byId('unitModalTitle').textContent='Editar unidade'; M.openModal('unitModal'); }
-  function populatePromotionForm(id) { const x=state.promotions[id]; if(!x)return; resetPromotionForm(); const f=byId('promotionForm'); ['marketId','productName','category','brand','packageText','price','previousPrice','sourceType','sourceReference','clubName','conditions','aliases'].forEach((k)=>{ if(f.elements[k])f.elements[k].value=x[k] ?? '';}); f.elements.priceKind.value=x.priceKind || (x.requiresClub ? 'club':'general'); refreshUnitSelects(); f.elements.unitId.value=x.unitId || ''; f.elements.startAt.value=M.toLocalDateTimeInput(x.startAt); f.elements.endAt.value=M.toLocalDateTimeInput(x.endAt); f.elements.id.value=id; f.elements.active.checked=x.active===true; f.elements.verified.checked=x.verified===true; byId('promotionModalTitle').textContent='Editar promoção'; M.openModal('promotionModal'); }
+  function populateMarketForm(id, trigger) { const x=state.markets[id]; if(!x)return; resetMarketForm(); const f=byId('marketForm'); Object.entries(x).forEach(([k,v])=>{ if(f.elements[k] && k!=='active') f.elements[k].value=v ?? ''; }); f.elements.id.value=id; f.elements.active.checked=x.active===true; byId('marketModalTitle').textContent='Editar mercado'; M.openModal('marketModal', { trigger }); }
+  function populateUnitForm(id, trigger) { const x=state.units[id]; if(!x)return; resetUnitForm(); const f=byId('unitForm'); ['marketId','name','address','city','state','lat','lng'].forEach((k)=>{ if(f.elements[k])f.elements[k].value=x[k] ?? '';}); f.elements.id.value=id; f.elements.active.checked=x.active===true; byId('unitModalTitle').textContent='Editar unidade'; M.openModal('unitModal', { trigger }); }
+  function populatePromotionForm(id, trigger) { const x=state.promotions[id]; if(!x)return; resetPromotionForm(); const f=byId('promotionForm'); ['marketId','productName','category','brand','packageText','price','previousPrice','sourceType','sourceReference','clubName','conditions','aliases'].forEach((k)=>{ if(f.elements[k])f.elements[k].value=x[k] ?? '';}); f.elements.priceKind.value=x.priceKind || (x.requiresClub ? 'club':'general'); refreshUnitSelects(); f.elements.unitId.value=x.unitId || ''; f.elements.startAt.value=M.toLocalDateTimeInput(x.startAt); f.elements.endAt.value=M.toLocalDateTimeInput(x.endAt); f.elements.id.value=id; f.elements.active.checked=x.active===true; f.elements.verified.checked=x.verified===true; byId('promotionModalTitle').textContent='Editar promoção'; M.openModal('promotionModal', { trigger }); }
 
   async function toggle(path,id,field,current,action,type) { await db.ref(`${path}/${id}/${field}`).set(!current); await db.ref(`${path}/${id}/updatedAt`).set(serverTimestamp); await audit(action,type,id,{[field]:!current}); M.toast('Status atualizado.', 'success'); }
 
@@ -298,7 +300,8 @@
     header_contamination: 'texto de cabeçalho misturado',
     price_inside_product_text: 'preço misturado ao nome',
     overlong_product_text: 'descrição excessivamente longa',
-    missing_club_name: 'programa/clube sem nome'
+    missing_club_name: 'programa/clube sem nome',
+    price_cluster_disagreement: 'preços próximos parecem pertencer a produtos diferentes'
   };
 
   function automationThreshold() {
@@ -312,10 +315,13 @@
     if (candidate.verified && candidate.verificationMode === 'manual') return 'manual';
     const risks = new Set(candidate.riskFlags || []);
     candidate.riskFlags = [...risks];
-    const hardBlock = ['association_disagreement','missing_validity','too_many_prices','ambiguous_price_kind','invalid_price','invalid_previous_price','header_contamination','price_inside_product_text']
+    const hardBlock = ['association_disagreement','missing_validity','too_many_prices','ambiguous_price_kind','invalid_price','invalid_previous_price','header_contamination','price_inside_product_text','price_cluster_disagreement']
       .some((x) => risks.has(x));
-    if (!hardBlock && candidate.automationSafe === true && Number(candidate.confidence || 0) >= threshold) return 'auto';
-    if (!hardBlock && Number(candidate.confidence || 0) >= .90) return 'supervised';
+    const confidence = Number(candidate.confidence || 0);
+    const structuralFloor = threshold >= .99 ? .94 : (threshold >= .98 ? .92 : .90);
+    if (!hardBlock && candidate.automationSafe === true && confidence >= threshold) return 'auto';
+    if (!hardBlock && candidate.structuralSafe === true && confidence >= structuralFloor) return 'auto';
+    if (!hardBlock && confidence >= .90) return 'supervised';
     return 'review';
   }
 
@@ -365,7 +371,7 @@
       ? `${M.formatDateOnly(validity.startAt)} a ${M.formatDateOnly(validity.endAt)}`
       : 'validade não confirmada automaticamente';
     const thresholdPct = Math.round((imp.threshold || .98) * 100);
-    byId('pdfImportMeta').innerHTML = `<div class="pdf-automation-summary">Arquivo: <strong>${M.escapeHtml(imp.result.fileName)}</strong> · ${imp.result.numPages} página${imp.result.numPages === 1 ? '' : 's'} · ${M.escapeHtml(validityText)} · SHA-256 ${M.escapeHtml((imp.result.hash || '').slice(0,16))}…<br><strong>${autoPending}</strong> automáticos aguardando publicação · <strong>${reviewPending}</strong> exceções para revisão · limite automático <strong>${thresholdPct}%</strong> · motor ${M.escapeHtml(imp.result.engineVersion || '2.0.0')} / PDF.js ${M.escapeHtml(imp.result.pdfjsVersion || '')}</div>`;
+    byId('pdfImportMeta').innerHTML = `<div class="pdf-automation-summary">Arquivo: <strong>${M.escapeHtml(imp.result.fileName)}</strong> · ${imp.result.numPages} página${imp.result.numPages === 1 ? '' : 's'} · ${M.escapeHtml(validityText)} · SHA-256 ${M.escapeHtml((imp.result.hash || '').slice(0,16))}…<br><strong>${autoPending}</strong> automáticos aguardando publicação · <strong>${reviewPending}</strong> exceções para revisão · limite automático <strong>${thresholdPct}%</strong> · motor ${M.escapeHtml(imp.result.engineVersion || '2.2.0')} / PDF.js ${M.escapeHtml(imp.result.pdfjsVersion || '')}</div>`;
 
     const q = M.normalizeText(byId('pdfCandidateSearch')?.value || '');
     const filter = byId('pdfCandidateFilter')?.value || 'all';
@@ -406,7 +412,7 @@
         </div>
         <div class="pdf-confidence ${conf.n < 90 ? 'low':''}">
           <div class="pdf-confidence-track"><span style="width:${conf.n}%"></span></div>
-          <span class="small muted">Associação espacial dupla: ${Math.round(Number(x.associationAgreement || 0) * 100)}%.</span>
+          <span class="small muted">Associação dupla: ${Math.round(Number(x.associationAgreement || 0) * 100)}% · domínio do bloco: ${Math.round(Number(x.ownershipConfidence || 0) * 100)}% · coerência do bloco: ${Math.round(Number(x.clusterCoherence || 0) * 100)}%.</span>
         </div>
         <div class="entity-actions" style="margin-top:12px">
           <button class="btn btn-secondary btn-sm" type="button" data-pdf-review="${M.escapeHtml(x.id)}">${x.published ? 'Ver origem' : (x.automationDecision === 'auto' ? 'Ver evidência' : 'Revisar exceção')}</button>
@@ -447,7 +453,7 @@
       const result = await importer.analyzeFile(file, { lowerPriceIsClub, clubName }, (progress) => {
         setPdfProgress(progress.percent, `Conferindo página ${progress.pageNumber} de ${progress.numPages}...`);
       });
-      result.engineVersion = importer.ENGINE_VERSION || '2.0.0';
+      result.engineVersion = importer.ENGINE_VERSION || '2.2.0';
       if (result.validity?.startAt && !byId('pdfImportStartAt').value) byId('pdfImportStartAt').value = M.toLocalDateTimeInput(result.validity.startAt);
       if (result.validity?.endAt && !byId('pdfImportEndAt').value) byId('pdfImportEndAt').value = M.toLocalDateTimeInput(result.validity.endAt);
 
@@ -488,7 +494,7 @@
     }
   }
 
-  async function openPdfReview(candidateId) {
+  async function openPdfReview(candidateId, trigger) {
     const imp = getPdfImport();
     const candidate = imp?.candidates.find((x) => x.id === candidateId);
     if (!candidate) return;
@@ -511,7 +517,7 @@
     f.elements.verified.checked = candidate.verified === true;
     byId('pdfReviewSource').textContent = `${imp.result.fileName} · página ${candidate.pageNumber} · SHA-256 ${(imp.result.hash || '').slice(0,16)}…`;
     byId('pdfDetectedPrices').textContent = `Valores detectados nesta região: ${(candidate.detectedPrices || [candidate.price]).map(M.formatCurrency).join(' · ')}. A detecção automática é apenas uma sugestão; confira a imagem acima.`;
-    M.openModal('pdfReviewModal');
+    M.openModal('pdfReviewModal', { trigger });
     const canvas = byId('pdfReviewCanvas');
     const ctx = canvas.getContext('2d');
     canvas.width = 560; canvas.height = 160;
@@ -584,14 +590,33 @@
     M.toast('Candidato ignorado. Nada foi gravado como promoção.', 'info');
   }
 
+  function pdfPromotionFingerprint(candidate, imp) {
+    return [
+      imp.result.hash || '',
+      imp.unitId || '',
+      M.normalizeText(candidate.productName || ''),
+      M.normalizeText(candidate.packageText || ''),
+      Number(candidate.price || 0).toFixed(2),
+      candidate.priceKind || 'general',
+      candidate.requiresClub ? M.normalizeText(candidate.clubName || '') : ''
+    ].join('|');
+  }
+
   function isDuplicatePdfPromotion(candidate, imp) {
-    return Object.values(state.promotions || {}).some((promo) =>
-      promo && promo.sourceHash && promo.sourceHash === imp.result.hash
-      && Number(promo.sourcePage || 0) === Number(candidate.pageNumber || 0)
-      && Math.abs(Number(promo.price || 0) - Number(candidate.price || 0)) < .001
-      && M.normalizeText(promo.productName || '') === M.normalizeText(candidate.productName || '')
-      && promo.unitId === imp.unitId
-    );
+    const fingerprint = pdfPromotionFingerprint(candidate, imp);
+    return Object.values(state.promotions || {}).some((promo) => {
+      if (!promo || !promo.sourceHash || promo.sourceHash !== imp.result.hash || promo.unitId !== imp.unitId) return false;
+      const existing = [
+        promo.sourceHash || '',
+        promo.unitId || '',
+        M.normalizeText(promo.productName || ''),
+        M.normalizeText(promo.packageText || ''),
+        Number(promo.price || 0).toFixed(2),
+        promo.priceKind || 'general',
+        promo.requiresClub ? M.normalizeText(promo.clubName || '') : ''
+      ].join('|');
+      return existing === fingerprint;
+    });
   }
 
   async function publishPdfCandidateSet(candidates, mode, silent = false) {
@@ -603,14 +628,17 @@
 
     const updates = {};
     const created = [];
+    const batchFingerprints = new Set();
     let duplicates = 0;
     candidates.forEach((candidate) => {
-      if (isDuplicatePdfPromotion(candidate, imp)) {
+      const fingerprint = pdfPromotionFingerprint(candidate, imp);
+      if (batchFingerprints.has(fingerprint) || isDuplicatePdfPromotion(candidate, imp)) {
         candidate.published = true;
         candidate.duplicate = true;
         duplicates += 1;
         return;
       }
+      batchFingerprints.add(fingerprint);
       const startAt = Number(candidate.startAt || M.toTimestampFromLocalInput(byId('pdfImportStartAt').value) || imp.result.validity?.startAt || 0);
       const endAt = Number(candidate.endAt || M.toTimestampFromLocalInput(byId('pdfImportEndAt').value) || imp.result.validity?.endAt || 0);
       if (!startAt || !endAt || endAt <= startAt || !Number.isFinite(Number(candidate.price)) || Number(candidate.price) <= 0 || candidate.priceKind === 'review') {
@@ -645,7 +673,7 @@
         aliases: '',
         verified: true,
         verificationMode: mode === 'automatic' ? 'automatic' : 'manual',
-        automationEngineVersion: imp.result.engineVersion || '2.0.0',
+        automationEngineVersion: imp.result.engineVersion || '2.2.0',
         automationThreshold: Number(imp.threshold || .98),
         automationConfidence: Number(candidate.confidence || 0),
         automationEvidence: (candidate.evidence || []).slice(0,10),
@@ -676,7 +704,7 @@
         pages: imp.result.numPages,
         sourceUrl: imp.sourceUrl || '',
         threshold: imp.threshold || .98,
-        engineVersion: imp.result.engineVersion || '2.0.0'
+        engineVersion: imp.result.engineVersion || '2.2.0'
       });
     }
     renderPdfImport();
@@ -750,19 +778,19 @@
 
     document.addEventListener('click', async (event) => {
       const t=event.target.closest('button,a'); if(!t)return;
-      if(t.dataset.pdfReview) { await openPdfReview(t.dataset.pdfReview); return; }
+      if(t.dataset.pdfReview) { event.preventDefault(); event.stopPropagation(); await openPdfReview(t.dataset.pdfReview, t); return; }
       if(t.dataset.userToggle){
         const id=t.dataset.userToggle; const x=state.users[id];
         if(x){ const next=x.status==='active'?'blocked':'active'; await db.ref(`users/${id}`).update({status:next,updatedAt:serverTimestamp}); await audit('user_status_changed','user',id,{status:next}); M.toast(`Usuário ${next==='active'?'ativado':'bloqueado'}.`,'success'); }
       }
-      if(t.dataset.marketEdit) populateMarketForm(t.dataset.marketEdit);
-      if(t.dataset.unitEdit) populateUnitForm(t.dataset.unitEdit);
-      if(t.dataset.promoEdit) populatePromotionForm(t.dataset.promoEdit);
+      if(t.dataset.marketEdit) { event.preventDefault(); event.stopPropagation(); populateMarketForm(t.dataset.marketEdit, t); return; }
+      if(t.dataset.unitEdit) { event.preventDefault(); event.stopPropagation(); populateUnitForm(t.dataset.unitEdit, t); return; }
+      if(t.dataset.promoEdit) { event.preventDefault(); event.stopPropagation(); populatePromotionForm(t.dataset.promoEdit, t); return; }
       if(t.dataset.marketToggle){ const x=state.markets[t.dataset.marketToggle]; if(x) await toggle('markets',x.id,'active',x.active,'market_status_changed','market'); }
       if(t.dataset.unitToggle){ const x=state.units[t.dataset.unitToggle]; if(x) await toggle('market_units',x.id,'active',x.active,'unit_status_changed','market_unit'); }
       if(t.dataset.promoToggle){ const x=state.promotions[t.dataset.promoToggle]; if(x) await toggle('promotions',x.id,'active',x.active,'promotion_status_changed','promotion'); }
       if(t.dataset.inboxProcess){ await db.ref(`promotion_inbox/${t.dataset.inboxProcess}`).update({status:'processed',processedAt:serverTimestamp,processedBy:state.user.uid}); await audit('inbox_processed','promotion_inbox',t.dataset.inboxProcess); }
-      if(t.dataset.inboxPromo){ const x=state.inbox[t.dataset.inboxPromo]; if(!x)return; resetPromotionForm(); const f=byId('promotionForm'); if(x.marketId){f.elements.marketId.value=x.marketId;refreshUnitSelects();} f.elements.sourceType.value=x.sourceType==='encarte'?'encarte':'whatsapp'; f.elements.sourceReference.value=`Inbox ${t.dataset.inboxPromo} · recebido em ${M.formatDateTime(x.createdAt)}`; f.elements.aliases.value=''; M.openModal('promotionModal'); }
+      if(t.dataset.inboxPromo){ const x=state.inbox[t.dataset.inboxPromo]; if(!x)return; resetPromotionForm(); const f=byId('promotionForm'); if(x.marketId){f.elements.marketId.value=x.marketId;refreshUnitSelects();} f.elements.sourceType.value=x.sourceType==='encarte'?'encarte':'whatsapp'; f.elements.sourceReference.value=`Inbox ${t.dataset.inboxPromo} · recebido em ${M.formatDateTime(x.createdAt)}`; f.elements.aliases.value=''; M.openModal('promotionModal', { trigger: t }); }
     });
   }
 

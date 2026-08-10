@@ -2,7 +2,7 @@
   'use strict';
 
   const PDFJS_VERSION = '5.7.284';
-  const ENGINE_VERSION = '2.0.0';
+  const ENGINE_VERSION = '2.2.0';
   const PDFJS_BASE = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}`;
   let pdfjsPromise = null;
   let activeDocument = null;
@@ -84,25 +84,47 @@
   }
 
   function groupLines(boxes, tolerance = 4.5) {
-    const lines = [];
+    const rows = [];
     [...boxes].sort((a, b) => a.y - b.y || a.x - b.x).forEach((box) => {
       const cy = box.y + box.height / 2;
-      let line = lines.find((x) => Math.abs(x.cy - cy) <= tolerance);
-      if (!line) {
-        line = { cy, boxes: [] };
-        lines.push(line);
+      let row = rows.find((x) => Math.abs(x.cy - cy) <= tolerance);
+      if (!row) {
+        row = { cy, boxes: [] };
+        rows.push(row);
       }
-      line.boxes.push(box);
-      line.cy = line.boxes.reduce((sum, x) => sum + x.y + x.height / 2, 0) / line.boxes.length;
+      row.boxes.push(box);
+      row.cy = row.boxes.reduce((sum, x) => sum + x.y + x.height / 2, 0) / row.boxes.length;
     });
-    return lines.map((line) => {
-      line.boxes.sort((a, b) => a.x - b.x);
-      return {
-        ...line,
-        text: cleanText(line.boxes.map((x) => x.text).join(' ')),
-        box: unionBoxes(line.boxes)
+
+    const lines = [];
+    rows.forEach((row) => {
+      const sorted = row.boxes.sort((a, b) => a.x - b.x);
+      let segment = [];
+      const flush = () => {
+        if (!segment.length) return;
+        const text = cleanText(segment.map((x) => x.text).join(' '));
+        lines.push({
+          cy: segment.reduce((sum, x) => sum + x.y + x.height / 2, 0) / segment.length,
+          boxes: [...segment],
+          text,
+          box: unionBoxes(segment)
+        });
+        segment = [];
       };
-    }).sort((a, b) => a.cy - b.cy);
+      sorted.forEach((box) => {
+        if (segment.length) {
+          const prev = segment[segment.length - 1];
+          const gap = box.x - (prev.x + prev.width);
+          const scale = Math.max(prev.height || 0, box.height || 0, 6);
+          const maxGap = Math.max(15, Math.min(30, scale * 1.9));
+          if (gap > maxGap) flush();
+        }
+        segment.push(box);
+      });
+      flush();
+    });
+
+    return lines.sort((a, b) => a.cy - b.cy || a.box.x - b.box.x);
   }
 
   function productSimilarity(a, b) {
@@ -129,77 +151,260 @@
     return '';
   }
 
-  function findProductForPrice(priceBox, boxes) {
+  function rangeDistance(value, start, end) {
+    if (value < start) return start - value;
+    if (value > end) return value - end;
+    return 0;
+  }
+
+
+  function priceLineDistance(priceBox, lineBox) {
     const pc = center(priceBox);
-    const nearby = boxes.filter((b) => {
-      if (b === priceBox) return false;
-      if (b.height > 17) return false;
-      const bc = center(b);
-      const aboveDistance = priceBox.y - (b.y + b.height);
-      if (aboveDistance < -3 || aboveDistance > 112) return false;
-      if (Math.abs(bc.x - pc.x) > 82) return false;
-      const upper = b.text.toUpperCase();
-      if (/^(R\$|CADA)$/.test(upper)) return false;
-      if (/^[,\d.]+$/.test(upper)) return false;
-      return true;
-    });
+    const lc = center(lineBox);
+    const horizontal = rangeDistance(pc.x, lineBox.x - 3, lineBox.x + lineBox.width + 3);
+    const vertical = lineBox.y <= priceBox.y
+      ? Math.max(0, priceBox.y - (lineBox.y + lineBox.height))
+      : Math.max(0, lineBox.y - (priceBox.y + priceBox.height));
+    const belowPenalty = lc.y > pc.y ? Math.min(34, (lc.y - pc.y) * 1.55) : 0;
+    return horizontal * 1.45 + vertical * .74 + belowPenalty;
+  }
 
-    const lines = groupLines(nearby).filter((line) => !genericLine(line.text));
-    const productLines = lines.filter((line) => !conditionLine(line.text)).slice(-5);
-    const conditionLines = lines.filter((line) => conditionLine(line.text)).slice(-4);
+  function likelySiblingPrice(a, b) {
+    if (!a || !b) return false;
+    const ac = center(a.box || a);
+    const bc = center(b.box || b);
+    const dx = Math.abs(ac.x - bc.x);
+    const dy = Math.abs(ac.y - bc.y);
+    const xOverlap = overlapX(a.box || a, b.box || b);
+    return (dx <= 46 && dy <= 74) || (xOverlap > 0 && dy <= 92);
+  }
 
-    let productText = cleanText(productLines.map((x) => x.text).join(' '));
-    productText = productText
-      .replace(/\bOFERTAS?\s+ESPECIAIS\b/ig, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-
+  function lineOwnership(line, currentPrice, allPrices) {
+    const own = priceLineDistance(currentPrice.box || currentPrice, line.box);
+    let other = Infinity;
+    for (const candidate of (allPrices || [])) {
+      if (candidate === currentPrice) continue;
+      if (likelySiblingPrice(currentPrice, candidate)) continue;
+      other = Math.min(other, priceLineDistance(candidate.box || candidate, line.box));
+    }
+    if (!Number.isFinite(other)) return { accepted:true, confidence:1, own, other };
+    const margin = other - own;
+    const confidence = Math.max(0, Math.min(1, margin / Math.max(20, other)));
     return {
-      productText,
-      productBox: unionBoxes(productLines.flatMap((x) => x.boxes)),
-      localConditions: cleanText(conditionLines.map((x) => x.text).join(' · '))
+      accepted: own <= other + 4 && (margin >= -4),
+      confidence,
+      own,
+      other
     };
   }
 
-  function findProductForPriceStrict(priceBox, boxes) {
+  function nearbyContext(priceBox, boxes, xWindow = 95, yWindow = 82) {
     const pc = center(priceBox);
-    const nearby = boxes.filter((b) => {
-      if (b === priceBox || b.height > 18) return false;
-      const bc = center(b);
-      const aboveDistance = priceBox.y - (b.y + b.height);
-      if (aboveDistance < -2 || aboveDistance > 88) return false;
-      const horizontalOverlap = overlapX(
-        { x: priceBox.x - 56, y: priceBox.y, width: priceBox.width + 112, height: priceBox.height },
-        b
-      );
-      if (horizontalOverlap <= 0 && Math.abs(bc.x - pc.x) > 48) return false;
-      const upper = b.text.toUpperCase();
-      if (/^(R\$|CADA)$/.test(upper) || /^[,\d.]+$/.test(upper)) return false;
+    return cleanText((boxes || [])
+      .filter((box) => {
+        const bc = center(box);
+        return Math.abs(bc.x - pc.x) <= xWindow && Math.abs(bc.y - pc.y) <= yWindow;
+      })
+      .sort((a,b) => a.y - b.y || a.x - b.x)
+      .map((x) => x.text)
+      .join(' '));
+  }
+
+  function auxiliaryUnitPrice(priceBox, boxes) {
+    const context = nearbyContext(priceBox, boxes, 150, 110).toUpperCase();
+    return /NESTA\s+EMBALAGEM.{0,45}UNIDADE\s+SAI\s+POR/.test(context)
+      || /UNIDADE\s+SAI\s+POR/.test(context);
+  }
+
+  function dedupeProductText(value) {
+    let text = cleanText(value);
+    if (!text) return text;
+    const words = text.split(' ').filter(Boolean);
+    const compact = [];
+    for (const word of words) {
+      if (!compact.length || compact[compact.length - 1].toUpperCase() !== word.toUpperCase()) compact.push(word);
+    }
+    for (let size = Math.floor(compact.length / 2); size >= 2; size -= 1) {
+      const a = compact.slice(0, size).join(' ').toUpperCase();
+      const b = compact.slice(size, size * 2).join(' ').toUpperCase();
+      if (a === b) return compact.slice(0, size).join(' ');
+    }
+    return compact.join(' ')
+      .replace(/\b(\w+(?:[./-]\w+)*)\s+\1\b/gi, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function textQuality(text) {
+    const clean = dedupeProductText(text);
+    const words = clean.split(' ').filter(Boolean);
+    if (!words.length) return -100;
+    let score = 0;
+    if (words.length >= 2 && words.length <= 10) score += 8;
+    else if (words.length <= 14) score += 4;
+    else score -= (words.length - 14) * 2;
+    if (extractPackage(clean)) score += 5;
+    if (/\b(?:ARROZ|CAF[ÉE]|CERVEJA|REFRIG|LEITE|FEIJ|A[ÃA]O|PAP|SAB[ÃA]O|CARVAO|CARV[ÃA]O|LINGUI|AZEITE|MACAR|BOMBOM|IOGURTE|QUEIJO|FRANGO|BOVINO|SUINO|SUÍNO|ATUM|MILHO|FARINHA|A[CÇ][UÚ]CAR|CHOC|BISC|PAO|P[ÃA]O|FRALDA|DESOD|SH|AMAC|LAVA|AGUA|ÁGUA)\b/i.test(clean)) score += 4;
+    const unique = new Set(words.map((w) => w.toUpperCase()));
+    if (unique.size / Math.max(1, words.length) < .62) score -= 6;
+    if (/\b(?:OFERTA|WHATSAPP|HORARIO|HORÁRIO|VALIDA|VÁLIDA|TODO MUNDO)\b/i.test(clean)) score -= 12;
+    return score;
+  }
+
+  function chooseBestProductText(...values) {
+    const candidates = [...new Set(values.map(dedupeProductText).filter((x) => x && x.length >= 3))];
+    return candidates.sort((a, b) => textQuality(b) - textQuality(a) || a.length - b.length)[0] || '';
+  }
+
+  function extractProductForPrice(priceEntry, boxes, allPrices = [], strict = false) {
+    const priceBox = priceEntry.box || priceEntry;
+    const pc = center(priceBox);
+    const xLimit = strict ? 50 : 72;
+    const topWindow = strict ? 78 : 102;
+    const bottomWindow = strict ? 16 : 24;
+    const candidateLines = groupLines(boxes, strict ? 3.0 : 4.0)
+      .filter((line) => {
+        if (!line.text || genericLine(line.text) || conditionLine(line.text)) return false;
+        if (/R\$\s*\d|\b\d{1,5}[,.]\d{2}\b/.test(line.text)) return false;
+        if (line.box.height > 20) return false;
+        const lc = center(line.box);
+        const horizontal = rangeDistance(pc.x, line.box.x - 4, line.box.x + line.box.width + 4);
+        if (horizontal > xLimit) return false;
+        if (line.box.y < priceBox.y - topWindow) return false;
+        if (line.box.y > priceBox.y + priceBox.height + bottomWindow) return false;
+        if (lc.y > pc.y + bottomWindow) return false;
+        const ownership = lineOwnership(line, priceEntry, allPrices);
+        if (!ownership.accepted) return false;
+        line._priceOwnership = ownership;
+        return true;
+      });
+
+    if (!candidateLines.length) return { productText:'', productBox:null, localConditions:'', ownershipConfidence:0, localContext:nearbyContext(priceBox, boxes) };
+
+    const ranked = candidateLines.map((line) => {
+      const lc = center(line.box);
+      const horizontal = rangeDistance(pc.x, line.box.x, line.box.x + line.box.width);
+      const aboveGap = Math.max(0, priceBox.y - (line.box.y + line.box.height));
+      const overlapPenalty = lc.y > pc.y ? (lc.y - pc.y) * 2.8 : 0;
+      const farSidePenalty = Math.abs(lc.x - pc.x) > 58 ? 22 : 0;
+      const ownershipBonus = (line._priceOwnership?.confidence || 0) * 10;
+      const score = horizontal * 1.35 + aboveGap * .74 + overlapPenalty + farSidePenalty - Math.min(9, textQuality(line.text)) - ownershipBonus;
+      return { line, score };
+    }).sort((a,b) => a.score - b.score);
+
+    const seed = ranked[0].line;
+    const seedC = center(seed.box);
+    const ordered = candidateLines.sort((a,b) => a.cy - b.cy || a.box.x - b.box.x);
+    const seedIndex = ordered.indexOf(seed);
+    const selected = [seed];
+
+    const compatible = (line, reference) => {
+      const lc = center(line.box);
+      const rc = center(reference.box);
+      const centerDx = Math.abs(lc.x - rc.x);
+      const verticalGap = Math.max(0, Math.max(line.box.y, reference.box.y) - Math.min(line.box.y + line.box.height, reference.box.y + reference.box.height));
+      const minWidth = Math.max(1, Math.min(line.box.width, reference.box.width));
+      const xShare = overlapX(line.box, reference.box) / minWidth;
+      return centerDx <= (strict ? 38 : 48)
+        && verticalGap <= (strict ? 13 : 18)
+        && (xShare >= .08 || centerDx <= (strict ? 26 : 34));
+    };
+
+    for (let i = seedIndex - 1, ref = seed; i >= 0 && selected.length < (strict ? 4 : 5); i -= 1) {
+      const line = ordered[i];
+      if (seedC.y - center(line.box).y > (strict ? 46 : 60)) break;
+      if (!compatible(line, ref)) continue;
+      selected.unshift(line);
+      ref = line;
+    }
+    for (let i = seedIndex + 1, ref = seed; i < ordered.length && selected.length < (strict ? 4 : 5); i += 1) {
+      const line = ordered[i];
+      if (center(line.box).y - seedC.y > (strict ? 32 : 44)) break;
+      if (!compatible(line, ref)) continue;
+      selected.push(line);
+      ref = line;
+    }
+
+    const nearest = selected
+      .filter((line, idx, arr) => arr.findIndex((x) => x === line) === idx)
+      .sort((a,b) => a.cy - b.cy || a.box.x - b.box.x);
+
+    let productText = dedupeProductText(nearest.map((x) => x.text).join(' '));
+
+    // Se um bloco já contém uma embalagem e, depois dela, começa uma nova categoria
+    // forte, cortamos a cauda. Isso reduz mistura de dois produtos vizinhos sem
+    // apagar detalhes como "ovos tipos" ou "exceto italiano" do produto atual.
+    const boundary = productText.match(/\b\d+(?:[,.]\d+)?\s*(?:KG|G|ML|L|LT|LTS|UN|UND|UNIDADES|PCT|BDJ)\b/i);
+    if (boundary) {
+      const after = productText.slice((boundary.index || 0) + boundary[0].length);
+      const nextAnchor = after.search(/\b(?:CERVEJA|REFRIG|ARROZ|FEIJ[ÃA]O|CAF[ÉE]|LEITE|AZEITE|A[CÇ][UÚ]CAR|MACAR|MOLHO|FARINHA|CHOC|BISC|CARV[ÃA]O|SAB[ÃA]O|AMAC|LINGUI[CÇ]A|VINHO|AGUARDENTE|VODKA|WHISKY|SUCO|P[ÃA]O|QUEIJO|BACON|FRANGO|BOVINO|SU[IÍ]NO|IOGURTE|REQUEIJ[ÃA]O|MARGARINA|FRALDA|DESOD|LAVA|[ÁA]GUA)\b/i);
+      if (nextAnchor >= 0) {
+        const cut = (boundary.index || 0) + boundary[0].length + nextAnchor;
+        const trimmed = cleanText(productText.slice(0, cut));
+        if (trimmed.split(' ').length >= 2) productText = trimmed;
+      }
+    }
+
+    const conditionLines = groupLines(boxes, 4.0).filter((line) => {
+      if (!conditionLine(line.text)) return false;
+      const lc = center(line.box);
+      if (Math.abs(lc.x - pc.x) > 88) return false;
+      if (line.box.y < priceBox.y - 112 || line.box.y > priceBox.y + priceBox.height + 44) return false;
       return true;
     });
-    const lines = groupLines(nearby, 3.5).filter((line) => !genericLine(line.text));
-    const productLines = lines.filter((line) => !conditionLine(line.text)).slice(-4);
+
+    const ownershipValues = nearest.map((line) => line._priceOwnership?.confidence).filter(Number.isFinite);
+    const ownershipConfidence = ownershipValues.length
+      ? ownershipValues.reduce((sum, x) => sum + x, 0) / ownershipValues.length
+      : 0;
+
     return {
-      productText: cleanText(productLines.map((x) => x.text).join(' ')),
-      productBox: unionBoxes(productLines.flatMap((x) => x.boxes))
+      productText,
+      productBox: unionBoxes(nearest.flatMap((x) => x.boxes)),
+      localConditions: cleanText(conditionLines.map((x) => x.text).join(' · ')),
+      ownershipConfidence,
+      localContext: nearbyContext(priceBox, boxes)
     };
+  }
+
+  function findProductForPrice(priceEntry, boxes, allPrices) {
+    return extractProductForPrice(priceEntry, boxes, allPrices, false);
+  }
+
+  function findProductForPriceStrict(priceEntry, boxes, allPrices) {
+    return extractProductForPrice(priceEntry, boxes, allPrices, true);
   }
 
   function candidateQuality(input) {
     const {
       productName, packageText, category, detectedPrices, price, previousPrice,
-      validity, sourceBox, primaryProduct, strictProduct, priceBox, options, conditions
+      validity, sourceBox, primaryProduct, strictProduct, priceBox, options, conditions,
+      ownershipConfidence = 0, clusterCoherence = 0, localContext = ''
     } = input;
     const risks = [];
     const evidence = [];
     let score = 0.55;
     const words = cleanText(productName).split(' ').filter(Boolean);
     const agreement = productSimilarity(primaryProduct, strictProduct);
+    const quality = textQuality(productName);
+    const ownershipRescue = agreement < 0.60
+      && ownershipConfidence >= 0.82
+      && quality >= 7
+      && words.length >= 2
+      && words.length <= 14;
 
     if (agreement >= 0.80) { score += 0.15; evidence.push('dupla associação espacial concordante'); }
     else if (agreement >= 0.60) { score += 0.09; evidence.push('associação espacial compatível'); }
+    else if (ownershipRescue) { score += 0.08; evidence.push('associação isolada pelo domínio espacial'); }
     else if (strictProduct) { score -= 0.10; risks.push('association_disagreement'); }
+    else if (ownershipConfidence >= 0.88 && quality >= 7) { score += 0.045; evidence.push('associação única com domínio espacial forte'); }
     else { score -= 0.04; risks.push('single_association_pass'); }
+
+    if (ownershipConfidence >= 0.82) { score += 0.045; evidence.push('texto pertence ao mesmo bloco de preço'); }
+    else if (ownershipConfidence >= 0.55) { score += 0.02; evidence.push('domínio espacial compatível'); }
+
+    if (clusterCoherence >= 0.78) { score += 0.035; evidence.push('preços do bloco concordam com o mesmo produto'); }
+    else if ((detectedPrices || []).length > 1 && clusterCoherence < 0.45) { score -= 0.07; risks.push('price_cluster_disagreement'); }
 
     if (words.length >= 4) { score += 0.06; evidence.push('descrição detalhada'); }
     else if (words.length >= 2) score += 0.03;
@@ -213,8 +418,9 @@
     else { score -= 0.12; risks.push('missing_validity'); }
 
     const countPrices = (detectedPrices || []).length;
+    const clubEvidence = options.lowerPriceIsClub || /\b(CLUBE|CLIENTE\s+CLUBE|CLIENTE.*PAGA)\b/i.test(`${conditions || ''} ${localContext || ''}`);
     if (countPrices === 1) { score += 0.05; evidence.push('preço único no bloco'); }
-    else if (countPrices === 2 && (options.lowerPriceIsClub || /\b(CLUBE|CLIENTE.*PAGA)\b/i.test(conditions || ''))) { score += 0.04; evidence.push('duplo preço com sinal de programa/clube'); }
+    else if (countPrices === 2 && clubEvidence) { score += 0.06; evidence.push('duplo preço com sinal de programa/clube'); }
     else if (countPrices > 2) { score -= 0.12; risks.push('too_many_prices'); }
     else if (countPrices === 2) { score -= 0.06; risks.push('ambiguous_price_kind'); }
 
@@ -233,18 +439,36 @@
     }
     if (words.length > 18) { score -= 0.08; risks.push('overlong_product_text'); }
 
-    const critical = new Set(['association_disagreement','missing_validity','too_many_prices','ambiguous_price_kind','invalid_price','invalid_previous_price','header_contamination','price_inside_product_text']);
+    const critical = new Set([
+      'association_disagreement','missing_validity','too_many_prices','ambiguous_price_kind',
+      'invalid_price','invalid_previous_price','header_contamination','price_inside_product_text',
+      'price_cluster_disagreement'
+    ]);
     if (risks.some((r) => critical.has(r))) score = Math.min(score, 0.965);
-    if (risks.includes('association_disagreement') || risks.includes('header_contamination')) score = Math.min(score, 0.89);
+    if (risks.includes('association_disagreement') || risks.includes('header_contamination') || risks.includes('price_cluster_disagreement')) score = Math.min(score, 0.89);
     if (risks.includes('missing_validity') || risks.includes('invalid_price')) score = Math.min(score, 0.84);
 
-    score = Math.max(0.35, Math.min(0.995, score));
+    score = Math.max(0.35, Math.min(0.997, score));
+    const uniqueRisks = [...new Set(risks)];
+    const hasCritical = uniqueRisks.some((r) => critical.has(r));
+    const associationSafe = agreement >= 0.80 || ownershipRescue || (agreement >= 0.60 && ownershipConfidence >= 0.72);
+    const structuralSafe = !hasCritical
+      && Boolean(validity?.startAt && validity?.endAt)
+      && associationSafe
+      && (ownershipConfidence >= 0.55 || agreement >= 0.90)
+      && words.length >= 2 && words.length <= 14
+      && !uniqueRisks.includes('overlong_product_text')
+      && !uniqueRisks.includes('short_product_name')
+      && (countPrices === 1 || (countPrices === 2 && clubEvidence));
     return {
       confidence: score,
-      riskFlags: [...new Set(risks)],
+      riskFlags: uniqueRisks,
       evidence: [...new Set(evidence)],
       associationAgreement: agreement,
-      automationSafe: !risks.some((r) => critical.has(r)) && score >= 0.97
+      ownershipConfidence,
+      clusterCoherence,
+      structuralSafe,
+      automationSafe: !hasCritical && structuralSafe && score >= 0.97
     };
   }
 
@@ -323,7 +547,7 @@
       });
       if (!duplicate) deduped.push(price);
     }
-    return deduped;
+    return deduped.filter((price) => !auxiliaryUnitPrice(price.box, boxes));
   }
 
   function detectGlobalCondition(text) {
@@ -388,8 +612,8 @@
   function buildCandidates(pageNumber, pageWidth, pageHeight, boxes, priceBoxes, validity, options, inferCategory) {
     const globalCondition = validity?.condition || '';
     const rawPrices = priceBoxes.map((price, index) => {
-      const info = findProductForPrice(price.box, boxes);
-      const strict = findProductForPriceStrict(price.box, boxes);
+      const info = findProductForPrice(price, boxes, priceBoxes);
+      const strict = findProductForPriceStrict(price, boxes, priceBoxes);
       return {
         id: `${pageNumber}-${index}`,
         pageNumber,
@@ -397,42 +621,70 @@
         pageHeight,
         price: price.price,
         priceBox: price.box,
-        productName: info.productText,
-        strictProductName: strict.productText,
+        productName: dedupeProductText(info.productText),
+        strictProductName: dedupeProductText(strict.productText),
         productBox: info.productBox,
-        localConditions: info.localConditions
+        localConditions: info.localConditions,
+        localContext: info.localContext || strict.localContext || '',
+        ownershipConfidence: Math.max(Number(info.ownershipConfidence || 0), Number(strict.ownershipConfidence || 0))
       };
     }).filter((x) => x.productName && x.productName.length >= 3);
 
     const clusters = [];
     rawPrices.forEach((entry) => {
       const ec = center(entry.priceBox);
-      let cluster = clusters.find((x) => {
-        const xc = center(x.entries[0].priceBox);
-        const sim = productSimilarity(entry.productName, x.entries[0].productName);
-        return Math.abs(ec.x - xc.x) <= 68 && Math.abs(ec.y - xc.y) <= 125 && sim >= 0.58;
-      });
-      if (!cluster) {
-        cluster = { entries: [] };
-        clusters.push(cluster);
+      let best = null;
+      for (const candidate of clusters) {
+        const first = candidate.entries[0];
+        const xc = center(first.priceBox);
+        const sim = Math.max(
+          productSimilarity(entry.productName, first.productName),
+          productSimilarity(entry.strictProductName, first.strictProductName),
+          productSimilarity(entry.productName, first.strictProductName),
+          productSimilarity(entry.strictProductName, first.productName)
+        );
+        const dx = Math.abs(ec.x - xc.x);
+        const dy = Math.abs(ec.y - xc.y);
+        const overlap = overlapX(entry.priceBox, first.priceBox);
+        const context = `${entry.localContext || ''} ${entry.localConditions || ''} ${first.localContext || ''} ${first.localConditions || ''}`;
+        const clubish = /\b(CLUBE|CLIENTE\s+CLUBE|CLIENTE.*PAGA)\b/i.test(context);
+        const geometricPair = (dx <= 48 && dy <= 78) || (overlap > 0 && dy <= 92);
+        const sameProduct = sim >= 0.62 && dx <= 62 && dy <= 112;
+        const clubPair = clubish && geometricPair && sim >= 0.18;
+        if (!(sameProduct || clubPair)) continue;
+        const rank = sim * 100 - dx * .35 - dy * .18 + (clubPair ? 18 : 0);
+        if (!best || rank > best.rank) best = { candidate, rank };
       }
-      cluster.entries.push(entry);
+      if (!best) {
+        clusters.push({ entries: [entry] });
+      } else {
+        best.candidate.entries.push(entry);
+      }
     });
 
     return clusters.map((cluster, index) => {
-      const entriesSortedByName = [...cluster.entries].sort((a, b) => b.productName.length - a.productName.length);
-      const productName = entriesSortedByName[0].productName;
-      const strictProduct = entriesSortedByName.map((x) => x.strictProductName).filter(Boolean).sort((a,b) => b.length-a.length)[0] || '';
+      const productName = chooseBestProductText(...cluster.entries.flatMap((x) => [x.productName, x.strictProductName]));
+      const strictProduct = chooseBestProductText(...cluster.entries.map((x) => x.strictProductName));
       const uniquePrices = [...new Set(cluster.entries.map((x) => Number(x.price.toFixed(2))))].sort((a, b) => a - b);
       const promoPrice = uniquePrices[0];
       const normalPrice = uniquePrices.length > 1 ? uniquePrices[uniquePrices.length - 1] : null;
       const multiple = uniquePrices.length > 1;
       const packageText = extractPackage(productName);
       const category = inferCategory ? (inferCategory(productName) || 'outros') : 'outros';
+      const localContext = cleanText(cluster.entries.map((x) => x.localContext).filter(Boolean).join(' · '));
       const conditions = cleanText([globalCondition, ...cluster.entries.map((x) => x.localConditions)].filter(Boolean).join(' · '));
-      const clubSignal = /\b(CLUBE|CLIENTE\s+CLUBE|CLIENTE.*PAGA)\b/i.test(conditions);
+      const clubSignal = /\b(CLUBE|CLIENTE\s+CLUBE|CLIENTE.*PAGA)\b/i.test(`${conditions} ${localContext}`);
       const priceKind = multiple ? ((clubSignal || options.lowerPriceIsClub) ? 'club' : 'review') : 'general';
       const sourceBox = unionBoxes(cluster.entries.flatMap((x) => [x.productBox, x.priceBox]));
+      const ownershipConfidence = cluster.entries.length
+        ? cluster.entries.reduce((sum, x) => sum + Number(x.ownershipConfidence || 0), 0) / cluster.entries.length
+        : 0;
+      const coherenceValues = cluster.entries
+        .map((x) => Math.max(productSimilarity(productName, x.productName), productSimilarity(productName, x.strictProductName)))
+        .filter(Number.isFinite);
+      const clusterCoherence = coherenceValues.length
+        ? coherenceValues.reduce((sum, x) => sum + x, 0) / coherenceValues.length
+        : 0;
       const quality = candidateQuality({
         productName,
         packageText,
@@ -446,7 +698,10 @@
         strictProduct,
         priceBox: cluster.entries[0].priceBox,
         options,
-        conditions
+        conditions,
+        localContext,
+        ownershipConfidence,
+        clusterCoherence
       });
 
       return {
@@ -470,6 +725,9 @@
         riskFlags: quality.riskFlags,
         evidence: quality.evidence,
         associationAgreement: quality.associationAgreement,
+        ownershipConfidence: quality.ownershipConfidence,
+        clusterCoherence: quality.clusterCoherence,
+        structuralSafe: quality.structuralSafe,
         automationSafe: quality.automationSafe,
         sourceBox,
         startAt: validity?.startAt || null,

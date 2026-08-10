@@ -131,25 +131,122 @@
     }
   };
 
-  M.openModal = function openModal(id) {
+  const modalRuntime = {
+    openedAt: new WeakMap(),
+    opener: new WeakMap(),
+    backdropPointer: new WeakMap(),
+    stack: []
+  };
+
+  function isCoarsePointer() {
+    try { return window.matchMedia && window.matchMedia('(pointer: coarse)').matches; }
+    catch (_) { return false; }
+  }
+
+  function syncModalBodyState() {
+    const anyOpen = modalRuntime.stack.some((el) => el && !el.hidden);
+    document.body.classList.toggle('modal-open', anyOpen);
+  }
+
+  M.openModal = function openModal(id, options = {}) {
     const el = document.getElementById(id);
     if (!el) return;
+
+    const trigger = options.trigger || document.activeElement;
+    if (trigger && trigger !== document.body && !el.contains(trigger)) modalRuntime.opener.set(el, trigger);
+
     el.hidden = false;
-    document.body.classList.add('modal-open');
-    const focusable = el.querySelector('input,select,textarea,button');
-    setTimeout(() => focusable?.focus(), 20);
+    el.setAttribute('aria-hidden', 'false');
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    modalRuntime.openedAt.set(el, performance.now());
+
+    modalRuntime.stack = modalRuntime.stack.filter((x) => x && x !== el && !x.hidden);
+    modalRuntime.stack.push(el);
+    syncModalBodyState();
+
+    // No celular, abrir o teclado automaticamente altera o viewport e pode gerar
+    // um segundo toque/"ghost click" no backdrop. O foco automático fica restrito
+    // a ponteiros finos (desktop/mouse) ou quando solicitado explicitamente.
+    const shouldFocus = options.focus === true || (options.focus !== false && !isCoarsePointer());
+    if (shouldFocus) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const focusable = el.querySelector('[autofocus], input:not([type="hidden"]), select, textarea, button:not([disabled]), [tabindex]:not([tabindex="-1"])');
+          try { focusable?.focus({ preventScroll: true }); } catch (_) { focusable?.focus(); }
+        });
+      });
+    }
   };
 
-  M.closeModal = function closeModal(id) {
+  M.closeModal = function closeModal(id, options = {}) {
     const el = document.getElementById(id);
-    if (!el) return;
+    if (!el || el.hidden) return;
     el.hidden = true;
-    document.body.classList.remove('modal-open');
+    el.setAttribute('aria-hidden', 'true');
+    modalRuntime.backdropPointer.delete(el);
+    modalRuntime.stack = modalRuntime.stack.filter((x) => x && x !== el && !x.hidden);
+    syncModalBodyState();
+
+    if (options.restoreFocus !== false && !isCoarsePointer()) {
+      const opener = modalRuntime.opener.get(el);
+      if (opener && document.contains(opener)) {
+        requestAnimationFrame(() => {
+          try { opener.focus({ preventScroll: true }); } catch (_) { opener.focus?.(); }
+        });
+      }
+    }
   };
 
+  // Botões explícitos são a forma principal de fechar. Não usamos mais "click"
+  // genérico no fundo do modal, pois em navegadores móveis um toque que abre o
+  // modal pode ser reprocessado depois da mudança de layout e fechá-lo em seguida.
   document.addEventListener('click', (event) => {
     const close = event.target.closest('[data-close-modal]');
-    if (close) M.closeModal(close.dataset.closeModal);
-    if (event.target.classList.contains('modal')) M.closeModal(event.target.id);
+    if (!close) return;
+    event.preventDefault();
+    event.stopPropagation();
+    M.closeModal(close.dataset.closeModal);
   });
+
+  // Fechamento pelo backdrop continua disponível, porém exige pointerdown e
+  // pointerup no próprio backdrop, sem arrasto e depois de uma janela mínima
+  // desde a abertura. Isso elimina o abre/fecha instantâneo no celular.
+  document.addEventListener('pointerdown', (event) => {
+    const modal = event.target.classList?.contains('modal') ? event.target : null;
+    if (!modal || modal.hidden) return;
+    modalRuntime.backdropPointer.set(modal, {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      at: performance.now()
+    });
+  }, true);
+
+  document.addEventListener('pointerup', (event) => {
+    const modal = event.target.classList?.contains('modal') ? event.target : null;
+    if (!modal || modal.hidden) return;
+    const start = modalRuntime.backdropPointer.get(modal);
+    modalRuntime.backdropPointer.delete(modal);
+    if (!start || start.pointerId !== event.pointerId) return;
+    const openedAt = modalRuntime.openedAt.get(modal) || 0;
+    if (performance.now() - openedAt < 420) return;
+    const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+    if (moved > 12) return;
+    M.closeModal(modal.id);
+  }, true);
+
+  document.addEventListener('pointercancel', (event) => {
+    const modal = event.target.classList?.contains('modal') ? event.target : null;
+    if (modal) modalRuntime.backdropPointer.delete(modal);
+  }, true);
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const top = [...modalRuntime.stack].reverse().find((el) => el && !el.hidden);
+    if (!top) return;
+    event.preventDefault();
+    M.closeModal(top.id);
+  });
+
 })();
