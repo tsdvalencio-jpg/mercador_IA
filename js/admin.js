@@ -565,7 +565,11 @@
     price_inside_product_text: 'preço misturado ao nome',
     overlong_product_text: 'descrição excessivamente longa',
     missing_club_name: 'programa/clube sem nome',
-    price_cluster_disagreement: 'preços próximos parecem pertencer a produtos diferentes'
+    price_cluster_disagreement: 'preços próximos parecem pertencer a produtos diferentes',
+    ocr_price_without_currency: 'OCR identificou valor sem marcador R$',
+    ocr_low_text_confidence: 'OCR com baixa confiança na descrição',
+    ocr_low_price_confidence: 'OCR com baixa confiança no preço',
+    ocr_validity_inferred: 'validade inferida pelo nome do arquivo'
   };
 
   function automationThreshold() {
@@ -579,7 +583,7 @@
     if (candidate.verified && candidate.verificationMode === 'manual') return 'manual';
     const risks = new Set(candidate.riskFlags || []);
     candidate.riskFlags = [...risks];
-    const hardBlock = ['association_disagreement','missing_validity','too_many_prices','ambiguous_price_kind','invalid_price','invalid_previous_price','header_contamination','price_inside_product_text','price_cluster_disagreement']
+    const hardBlock = ['association_disagreement','missing_validity','too_many_prices','ambiguous_price_kind','invalid_price','invalid_previous_price','header_contamination','price_inside_product_text','price_cluster_disagreement','ocr_price_without_currency','ocr_low_price_confidence','ocr_validity_inferred']
       .some((x) => risks.has(x));
     const confidence = Number(candidate.confidence || 0);
     const structuralFloor = threshold >= .99 ? .94 : (threshold >= .98 ? .92 : .90);
@@ -636,7 +640,7 @@
       ? `${M.formatDateOnly(validity.startAt)} a ${M.formatDateOnly(validity.endAt)}`
       : 'validade não confirmada automaticamente';
     const thresholdPct = Math.round((imp.threshold || .98) * 100);
-    byId('pdfImportMeta').innerHTML = `<div class="pdf-automation-summary">Arquivo: <strong>${M.escapeHtml(imp.result.fileName)}</strong> · ${imp.result.numPages} página${imp.result.numPages === 1 ? '' : 's'} · ${M.escapeHtml(validityText)} · SHA-256 ${M.escapeHtml((imp.result.hash || '').slice(0,16))}…<br><strong>${autoPending}</strong> automáticos prontos · <strong>${manualReady}</strong> revisados prontos · <strong>${reviewPending}</strong> pendentes de revisão · <strong>${ignored}</strong> excluídos desta importação · limite automático <strong>${thresholdPct}%</strong> · motor ${M.escapeHtml(imp.result.engineVersion || '2.2.0')} / PDF.js ${M.escapeHtml(imp.result.pdfjsVersion || '')}</div>`;
+    byId('pdfImportMeta').innerHTML = `<div class="pdf-automation-summary">Arquivo: <strong>${M.escapeHtml(imp.result.fileName)}</strong> · ${imp.result.numPages} página${imp.result.numPages === 1 ? '' : 's'} · ${M.escapeHtml(validityText)} · SHA-256 ${M.escapeHtml((imp.result.hash || '').slice(0,16))}…<br><strong>${autoPending}</strong> automáticos prontos · <strong>${manualReady}</strong> revisados prontos · <strong>${reviewPending}</strong> pendentes de revisão · <strong>${ignored}</strong> excluídos desta importação · limite automático <strong>${thresholdPct}%</strong> · motor ${M.escapeHtml(imp.result.engineVersion || '2.2.0')} / PDF.js ${M.escapeHtml(imp.result.pdfjsVersion || '')}${imp.result.extractionMode === 'ocr-image-fallback' ? ' · <strong>OCR visual</strong>' : ''}</div>`;
 
     const q = M.normalizeText(byId('pdfCandidateSearch')?.value || '');
     const filter = byId('pdfCandidateFilter')?.value || 'all';
