@@ -759,7 +759,9 @@
       const lowerPriceIsClub = byId('pdfImportLowerIsClub').checked;
       const clubName = byId('pdfImportClubName').value.trim();
       const threshold = automationThreshold();
-      const result = await importer.analyzeFile(file, { lowerPriceIsClub, clubName }, (progress) => {
+      const suppliedStartAt = M.toTimestampFromLocalInput(byId('pdfImportStartAt').value);
+      const suppliedEndAt = M.toTimestampFromLocalInput(byId('pdfImportEndAt').value);
+      const result = await importer.analyzeFile(file, { lowerPriceIsClub, clubName, suppliedStartAt, suppliedEndAt }, (progress) => {
         setPdfProgress(progress.percent, `Conferindo página ${progress.pageNumber} de ${progress.numPages}...`);
       });
       result.engineVersion = importer.ENGINE_VERSION || '2.2.0';
