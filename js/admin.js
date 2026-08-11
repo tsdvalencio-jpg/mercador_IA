@@ -569,7 +569,12 @@
     ocr_price_without_currency: 'OCR identificou valor sem marcador R$',
     ocr_low_text_confidence: 'OCR com baixa confiança na descrição',
     ocr_low_price_confidence: 'OCR com baixa confiança no preço',
-    ocr_validity_inferred: 'validade inferida pelo nome do arquivo'
+    ocr_validity_inferred: 'validade inferida pelo nome do arquivo',
+    ocr_price_single_pass: 'preço apareceu em apenas uma leitura OCR',
+    ocr_price_scale_suspicious: 'tamanho visual do valor não parece preço de oferta',
+    ocr_price_conflict: 'leituras OCR discordaram sobre o preço nesta região',
+    ocr_low_description_quality: 'descrição visual não tem qualidade suficiente para publicação',
+    ocr_block_ownership_weak: 'bloco de produto não pertence com segurança a este preço'
   };
 
   function automationThreshold() {
@@ -583,7 +588,7 @@
     if (candidate.verified && candidate.verificationMode === 'manual') return 'manual';
     const risks = new Set(candidate.riskFlags || []);
     candidate.riskFlags = [...risks];
-    const hardBlock = ['association_disagreement','missing_validity','too_many_prices','ambiguous_price_kind','invalid_price','invalid_previous_price','header_contamination','price_inside_product_text','price_cluster_disagreement','ocr_price_without_currency','ocr_low_price_confidence','ocr_validity_inferred']
+    const hardBlock = ['association_disagreement','missing_validity','too_many_prices','ambiguous_price_kind','invalid_price','invalid_previous_price','header_contamination','price_inside_product_text','price_cluster_disagreement','ocr_price_without_currency','ocr_low_price_confidence','ocr_validity_inferred','ocr_price_scale_suspicious','ocr_price_conflict','ocr_low_description_quality','ocr_block_ownership_weak']
       .some((x) => risks.has(x));
     const confidence = Number(candidate.confidence || 0);
     const structuralFloor = threshold >= .99 ? .94 : (threshold >= .98 ? .92 : .90);
