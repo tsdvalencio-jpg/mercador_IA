@@ -1,7 +1,7 @@
-const CACHE = 'mercador-ia-shell-v2.8.0';
+const CACHE = 'mercador-ia-shell-v2.9.0-card-first';
 
-// Shell enxuto do consumidor. O painel Admin/PDF é carregado somente quando
-// um administrador realmente o acessa — não pesa no PWA de todos os usuários.
+// Shell enxuto do consumidor. O painel Admin/PDF e o Card Resolver são carregados
+// somente quando um administrador realmente os acessa — não pesam no PWA do usuário.
 const USER_SHELL = [
   './', './index.html', './cadastro.html', './inicio.html', './usuario.html',
   './css/app.css', './css/auth.css', './css/inicio.css',
@@ -44,8 +44,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Assets versionados são cache-first; se não estiverem no shell, entram no
-  // cache sob demanda (ex.: Admin e importador de PDF).
+  // Assets versionados são cache-first; se não estiverem no shell, entram no cache
+  // sob demanda (ex.: Admin, importador PDF e Card Resolver).
   event.respondWith(
     caches.match(request).then((cached) => cached || fetch(request).then((response) => {
       if (response && response.ok) {
