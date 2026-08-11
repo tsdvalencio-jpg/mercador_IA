@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Mercador IA — Sua Compra</title>
+    <!-- Build consumidor: V2.9 · nota por câmera/galeria + finalização diferencial/idempotente -->
     <meta name="theme-color" content="#007aff"/>
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="./manifest.webmanifest">
@@ -250,21 +251,40 @@
         .report-edit-remove{height:38px;border:0;border-radius:8px;background:#fff0ef;color:#b52e27;cursor:pointer}
         .report-edit-total{margin-top:10px;text-align:right;font-weight:850;color:#16883a}
         .report-legacy-note{padding:9px 10px;border-radius:9px;background:#fff7e8;color:#8b5900;font-size:.75rem;line-height:1.4;margin-top:10px}
-        .legacy-import-card{list-style:none;margin:0 0 12px;padding:12px;border:1px solid #cfe0ef;border-radius:12px;background:linear-gradient(135deg,#f7fbff,#eef7ff);box-shadow:0 3px 10px rgba(0,71,128,.06)}
-        .legacy-import-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-        .legacy-import-card strong{display:block;font-size:.92rem;color:#173b57}.legacy-import-card p{margin:4px 0 0;color:#60717e;font-size:.72rem;line-height:1.4}
-        .legacy-import-btn{border:0;border-radius:9px;background:#0879d9;color:#fff;min-height:40px;padding:8px 11px;font-weight:850;cursor:pointer;white-space:nowrap}
-        .legacy-import-btn:disabled{opacity:.6;cursor:wait}
-        .legacy-import-status{margin-top:10px;padding:9px 10px;border-radius:9px;background:#eef3f7;color:#53606b;font-size:.75rem;line-height:1.45}
-        .legacy-import-status.error{background:#fff0ef;color:#a1322b}.legacy-import-status.success{background:#eaf8ee;color:#1b7137}
-        .legacy-import-preview{display:grid;gap:7px;margin-top:10px;max-height:260px;overflow:auto}
-        .legacy-import-preview-row{padding:9px;border:1px solid #dde5eb;border-radius:9px;background:#fff;font-size:.75rem;line-height:1.35}
-        .legacy-import-preview-row strong{display:block;color:#263844}.legacy-import-preview-row span{color:#687681}
-        .legacy-import-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:10px}
-        .legacy-import-kpi{padding:8px;border-radius:9px;background:#edf2f6;text-align:center;font-size:.67rem;color:#67737d}.legacy-import-kpi strong{display:block;font-size:1rem;color:#253642}
-        .legacy-import-help{font-size:.7rem;line-height:1.45;color:#6b7882;margin:8px 0 0}
-        .legacy-import-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
-        .legacy-import-actions button{min-height:42px;border:0;border-radius:9px;padding:9px 12px;font-weight:800;cursor:pointer}.legacy-import-actions .secondary{background:#e8edf1;color:#3f4c56}.legacy-import-actions .primary{background:#1f9d55;color:#fff}
+
+        .receipt-import-card{list-style:none;margin:0 0 12px;padding:12px;border:1px solid #bee3ca;border-radius:12px;background:linear-gradient(135deg,#f7fff9,#eefaf2);box-shadow:0 3px 10px rgba(23,115,55,.06)}
+        .receipt-import-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+        .receipt-import-card strong{display:block;font-size:.92rem;color:#17572e}.receipt-import-card p{margin:4px 0 0;color:#607168;font-size:.72rem;line-height:1.4}
+        .receipt-import-btn{border:0;border-radius:9px;background:#1f9d55;color:#fff;min-height:40px;padding:8px 11px;font-weight:850;cursor:pointer;white-space:nowrap}
+        .receipt-import-btn:disabled{opacity:.6;cursor:wait}
+        .receipt-help{font-size:.72rem;line-height:1.45;color:#63717a;margin:6px 0 10px}
+        .receipt-privacy{padding:8px 10px;border-radius:9px;background:#edf7f1;color:#28633c;font-size:.7rem;line-height:1.4;margin-bottom:10px}
+        .receipt-source-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px}
+        .receipt-source-actions button{min-height:46px;border:1px solid #cbd8d0;border-radius:11px;background:#fff;color:#30483a;font-weight:850;cursor:pointer}
+        .receipt-source-actions button:active{transform:scale(.985)}
+        .receipt-images{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:8px 0 10px}
+        .receipt-thumb{position:relative;aspect-ratio:3/4;border:1px solid #dce3df;border-radius:9px;overflow:hidden;background:#f3f5f4}
+        .receipt-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+        .receipt-thumb button{position:absolute;top:4px;right:4px;width:28px;height:28px;border:0;border-radius:50%;background:rgba(20,27,23,.8);color:#fff;font-size:.8rem;cursor:pointer}
+        .receipt-status{padding:9px 10px;border-radius:9px;background:#eef3f7;color:#53606b;font-size:.75rem;line-height:1.45;margin-top:8px}
+        .receipt-status.error{background:#fff0ef;color:#a1322b}.receipt-status.success{background:#eaf8ee;color:#1b7137}.receipt-status.warning{background:#fff7e8;color:#8b5900}
+        .receipt-progress{height:8px;border-radius:999px;background:#e4e9e6;overflow:hidden;margin:8px 0}.receipt-progress>span{display:block;height:100%;width:0;background:#1f9d55;transition:width .18s ease}
+        .receipt-review{margin-top:12px;border-top:1px solid #dbe2de;padding-top:12px}
+        .receipt-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:10px}
+        .receipt-kpi{padding:8px;border-radius:9px;background:#edf2f0;text-align:center;font-size:.67rem;color:#67736d}.receipt-kpi strong{display:block;font-size:1rem;color:#25362d}
+        .receipt-review-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.receipt-review-grid .full{grid-column:1/-1}
+        .receipt-items-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:12px 0 7px}.receipt-items-head button{border:0;border-radius:8px;background:#eaf3ff;color:#0869c9;padding:7px 9px;font-weight:800;cursor:pointer}
+        .receipt-items{display:grid;gap:7px;max-height:300px;overflow:auto;padding-right:2px}
+        .receipt-item-row{display:grid;grid-template-columns:minmax(0,1fr) 66px 82px 36px;gap:5px;align-items:center;padding:7px;border:1px solid #dfe5e1;border-radius:10px;background:#fff;position:relative}
+        .receipt-item-row input{width:100%;min-width:0;padding:7px 6px;border:1px solid #d4ddd7;border-radius:8px;background:#fff}
+        .receipt-item-row.low{border-color:#f0c36f;background:#fffaf0}.receipt-item-row.medium{border-color:#d6dfb5}
+        .receipt-item-remove{height:36px;border:0;border-radius:8px;background:#fff0ef;color:#b52e27;cursor:pointer}
+        .receipt-item-confidence{grid-column:1/-1;font-size:.64rem;color:#748078;margin-top:-2px}.receipt-item-confidence strong{color:#496153}
+        .receipt-reconcile{margin-top:9px;padding:8px 10px;border-radius:9px;background:#eef3f1;color:#506159;font-size:.72rem;line-height:1.4}.receipt-reconcile.warning{background:#fff7e8;color:#8b5900}.receipt-reconcile.ok{background:#eaf8ee;color:#1b7137}
+        .receipt-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}.receipt-actions button{min-height:42px;border:0;border-radius:9px;padding:9px 12px;font-weight:800;cursor:pointer}.receipt-actions .secondary{background:#e8edf1;color:#3f4c56}.receipt-actions .primary{background:#1f9d55;color:#fff}.receipt-actions button:disabled{opacity:.6;cursor:wait}
+        .finalize-state{font-size:.72rem;color:#53606b;margin-top:8px;min-height:18px;text-align:right}.finalize-state.error{color:#a1322b}.finalize-state.success{color:#1b7137}
+        @media(max-width:430px){.receipt-images{grid-template-columns:repeat(3,minmax(0,1fr))}.receipt-review-grid{grid-template-columns:1fr}.receipt-review-grid .full{grid-column:auto}.receipt-item-row{grid-template-columns:minmax(0,1fr) 58px 72px 34px}.receipt-item-row input{font-size:14px;padding:7px 4px}}
+
         .powered-user-footer{text-align:center;color:#aeb6bd;font-size:.66rem;padding:8px 0 0;line-height:1.25}
         .powered-user-footer strong{color:#e5eaee}
         .modal-content h3{margin-bottom:12px}
@@ -381,6 +401,7 @@
                 <div><button id="download-report-btn">Baixar</button><button id="print-report-btn">Imprimir</button></div>
                 <div><button id="close-modal-btn">Fechar</button><button id="finalize-purchase-btn" class="btn btn-success" style="padding: 8px 12px; font-size: 1rem; width: auto; height: auto;">Finalizar Compra</button></div>
             </div>
+            <div id="finalize-state" class="finalize-state" aria-live="polite"></div>
         </div>
     </div>
 
@@ -415,28 +436,42 @@
         </div>
     </div>
 
-    <div id="legacy-import-modal" class="modal-overlay">
+    <div id="receipt-import-modal" class="modal-overlay">
         <div class="modal-content">
-            <h3 style="margin-top:0;">Importar histórico antigo</h3>
-            <p class="legacy-import-help" style="margin-top:-4px">Conecta somente durante esta importação ao Firebase da antiga Lista Inteligente. A senha não é salva no Mercador IA.</p>
-            <div id="legacy-import-login">
-                <div class="modal-field"><label for="legacy-import-email">E-mail da lista antiga</label><input id="legacy-import-email" type="email" autocomplete="username" placeholder="seu@email.com"></div>
-                <div class="modal-field"><label for="legacy-import-password">Senha da lista antiga</label><input id="legacy-import-password" type="password" autocomplete="current-password" placeholder="Senha"></div>
-                <p class="legacy-import-help">Use a conta que acessava o sistema antigo. A busca lê apenas <strong>purchase_reports</strong> desse usuário e não altera o banco antigo. Nos relatórios antigos, nomes de produtos podem estar abreviados porque aquela versão gravava somente os primeiros caracteres no cupom.</p>
+            <h3 style="margin-top:0;">Registrar compra pela nota</h3>
+            <p class="receipt-help">Fotografe o cupom fiscal ou escolha até 4 imagens da galeria. O leitor identifica mercado, data, itens, quantidades, preços e total; você confere antes de salvar.</p>
+            <div class="receipt-privacy">🔒 As imagens ficam somente neste aparelho durante a leitura. O Mercador IA grava no Firebase apenas os dados que você confirmar — não envia a foto da nota para o Realtime Database.</div>
+            <div class="receipt-source-actions">
+                <button id="receipt-camera-btn" type="button">📷 Tirar foto</button>
+                <button id="receipt-gallery-btn" type="button">🖼️ Galeria</button>
+                <input id="receipt-camera-input" type="file" accept="image/*" capture="environment" hidden>
+                <input id="receipt-gallery-input" type="file" accept="image/*" multiple hidden>
             </div>
-            <div id="legacy-import-result" hidden>
-                <div id="legacy-import-kpis" class="legacy-import-kpis"></div>
-                <div id="legacy-import-preview" class="legacy-import-preview"></div>
+            <div id="receipt-images" class="receipt-images" hidden></div>
+            <div id="receipt-progress" class="receipt-progress" hidden><span></span></div>
+            <div id="receipt-status" class="receipt-status">Selecione uma foto nítida da nota. Em cupons longos, você pode adicionar mais de uma foto.</div>
+
+            <div id="receipt-review" class="receipt-review" hidden>
+                <div id="receipt-kpis" class="receipt-kpis"></div>
+                <div class="receipt-review-grid">
+                    <div class="modal-field full"><label for="receipt-market">Mercado / estabelecimento</label><input id="receipt-market" type="text" maxlength="160" placeholder="Ex.: Super Muffato"></div>
+                    <div class="modal-field"><label for="receipt-date">Data e hora da compra</label><input id="receipt-date" type="datetime-local"></div>
+                    <div class="modal-field"><label for="receipt-cnpj">CNPJ detectado</label><input id="receipt-cnpj" type="text" maxlength="24" placeholder="Opcional"></div>
+                    <div class="modal-field"><label for="receipt-total">Total pago</label><input id="receipt-total" type="number" min="0" step="0.01" inputmode="decimal"></div>
+                    <div class="modal-field"><label for="receipt-note">Observação</label><input id="receipt-note" type="text" maxlength="500" placeholder="Opcional"></div>
+                </div>
+                <div class="receipt-items-head"><strong>Itens detectados</strong><button id="receipt-add-item" type="button">+ Item</button></div>
+                <div id="receipt-items" class="receipt-items"></div>
+                <div id="receipt-reconcile" class="receipt-reconcile"></div>
             </div>
-            <div id="legacy-import-status" class="legacy-import-status">Informe o acesso da antiga Lista Inteligente para localizar as compras.</div>
-            <div class="legacy-import-actions">
-                <button id="legacy-import-cancel" type="button" class="secondary">Fechar</button>
-                <button id="legacy-import-search" type="button" class="secondary">Buscar histórico</button>
-                <button id="legacy-import-confirm" type="button" class="primary" hidden>Importar compras</button>
+
+            <div class="receipt-actions">
+                <button id="receipt-cancel" type="button" class="secondary">Fechar</button>
+                <button id="receipt-read" type="button" class="secondary" disabled>Ler nota</button>
+                <button id="receipt-save" type="button" class="primary" hidden>Salvar compra</button>
             </div>
         </div>
     </div>
-
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -485,7 +520,9 @@ document.addEventListener('DOMContentLoaded', () => {
         dirtyLists: new Set(['faltando','comprados','adiados']),
         tabScroll: { faltando:0, comprados:0, adiados:0, relatorios:0 },
         syncTimer: null,
-        legacyImport: { sourceUid:null, found:0, duplicates:0, pending:[], imported:0 },
+        receiptImport: { files:[], urls:[], rawText:'', pages:[], parsed:null, ocrConfidence:0, reading:false },
+        finalizeInFlight: false,
+        firebaseConnected: null,
         ui: { isCalculatorCollapsed: true },
     };
 
@@ -508,6 +545,7 @@ document.addEventListener('DOMContentLoaded', () => {
         printReportBtn: document.getElementById('print-report-btn'),
         downloadReportBtn: document.getElementById('download-report-btn'),
         finalizePurchaseBtn: document.getElementById('finalize-purchase-btn'),
+        finalizeState: document.getElementById('finalize-state'),
         reportViewModal: document.getElementById('report-view-modal'),
         reportViewContent: document.getElementById('report-view-content'),
         reportViewMeta: document.getElementById('report-view-meta'),
@@ -524,17 +562,29 @@ document.addEventListener('DOMContentLoaded', () => {
         addReportItemBtn: document.getElementById('add-report-item-btn'),
         cancelReportEditBtn: document.getElementById('cancel-report-edit-btn'),
         saveReportEditBtn: document.getElementById('save-report-edit-btn'),
-        legacyImportModal: document.getElementById('legacy-import-modal'),
-        legacyImportLogin: document.getElementById('legacy-import-login'),
-        legacyImportEmail: document.getElementById('legacy-import-email'),
-        legacyImportPassword: document.getElementById('legacy-import-password'),
-        legacyImportResult: document.getElementById('legacy-import-result'),
-        legacyImportKpis: document.getElementById('legacy-import-kpis'),
-        legacyImportPreview: document.getElementById('legacy-import-preview'),
-        legacyImportStatus: document.getElementById('legacy-import-status'),
-        legacyImportCancel: document.getElementById('legacy-import-cancel'),
-        legacyImportSearch: document.getElementById('legacy-import-search'),
-        legacyImportConfirm: document.getElementById('legacy-import-confirm'),
+
+        receiptImportModal: document.getElementById('receipt-import-modal'),
+        receiptCameraBtn: document.getElementById('receipt-camera-btn'),
+        receiptGalleryBtn: document.getElementById('receipt-gallery-btn'),
+        receiptCameraInput: document.getElementById('receipt-camera-input'),
+        receiptGalleryInput: document.getElementById('receipt-gallery-input'),
+        receiptImages: document.getElementById('receipt-images'),
+        receiptProgress: document.getElementById('receipt-progress'),
+        receiptProgressBar: document.querySelector('#receipt-progress > span'),
+        receiptStatus: document.getElementById('receipt-status'),
+        receiptReview: document.getElementById('receipt-review'),
+        receiptKpis: document.getElementById('receipt-kpis'),
+        receiptMarket: document.getElementById('receipt-market'),
+        receiptDate: document.getElementById('receipt-date'),
+        receiptCnpj: document.getElementById('receipt-cnpj'),
+        receiptTotal: document.getElementById('receipt-total'),
+        receiptNote: document.getElementById('receipt-note'),
+        receiptItems: document.getElementById('receipt-items'),
+        receiptAddItem: document.getElementById('receipt-add-item'),
+        receiptReconcile: document.getElementById('receipt-reconcile'),
+        receiptCancel: document.getElementById('receipt-cancel'),
+        receiptRead: document.getElementById('receipt-read'),
+        receiptSave: document.getElementById('receipt-save'),
         smartSuggestions: document.getElementById('smart-suggestions'),
         purchaseLocationOptions: document.getElementById('purchase-location-options'),
     };
@@ -673,173 +723,304 @@ document.addEventListener('DOMContentLoaded', () => {
         return text;
     };
 
-    const LEGACY_FIREBASE = Object.freeze({
-        apiKey: 'AIzaSyA9WEvRwaDuEDFlTlIwPxKvNr6hcNlYFbI',
-        databaseURL: 'https://thiaguinho-solucoes-default-rtdb.firebaseio.com',
-        projectId: 'thiaguinho-solucoes',
-        sourceSystem: 'thIAguinho_Solucoes_IA'
-    });
 
-    const legacyPushTimestamp = (key) => {
-        const chars='-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
-        const head=String(key || '').slice(0,8); if(head.length!==8)return 0;
-        let value=0;
-        for(const ch of head){const idx=chars.indexOf(ch);if(idx<0)return 0;value=value*64+idx;}
-        return value;
-    };
+    // --- Mercador IA V2.9: leitura de cupom fiscal somente sob demanda ---
+    const RECEIPT_OCR = Object.freeze({
+        scriptUrl:'https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js',
+        engine:'tesseract.js', version:'5.0.5', maxImages:4, maxFileBytes:15*1024*1024
+    });
 
     const parsePtBrDateTime = (value) => {
         const text=String(value || '').trim();
-        const match=text.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:,?\s+|\s*)(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+        let match=text.match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:[^\d]{1,5}(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
         if(!match)return null;
-        const dt=new Date(Number(match[3]),Number(match[2])-1,Number(match[1]),Number(match[4]),Number(match[5]),Number(match[6]||0));
+        let year=Number(match[3]); if(year<100)year+=2000;
+        const dt=new Date(year,Number(match[2])-1,Number(match[1]),Number(match[4]||12),Number(match[5]||0),Number(match[6]||0));
         return Number.isNaN(dt.getTime())?null:dt;
     };
 
-    const legacyNumber = (value) => {
-        if(typeof value==='number')return Number.isFinite(value)?value:0;
-        let text=String(value ?? '').trim().replace(/R\$/gi,'').replace(/\s/g,'');
-        if(text.includes(',') && text.includes('.')) text=text.replace(/\./g,'').replace(',','.');
-        else text=text.replace(',','.');
-        const n=Number(text); return Number.isFinite(n)?n:0;
-    };
-
-    const parseLegacyReportContent = (content) => {
-        const text=String(content || '').replace(/\r/g,'');
-        const locationMatch=text.match(/^LOCAL:\s*(.+)$/mi);
-        const dateMatch=text.match(/^DATA:\s*(.+)$/mi);
-        const totalMatch=text.match(/TOTAL\s+A\s+PAGAR:\s*R\$?\s*([\d.,]+)/i);
-        const items=[];
-        text.split('\n').forEach((line)=>{
-            const clean=line.trim();
-            if(!clean || /^(ITEM|TOTAL|LOCAL|DATA|[-*]{3,}|Powered\b)/i.test(clean))return;
-            const match=clean.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*=\s*(\d+(?:[.,]\d+)?)\s*$/i);
-            if(!match)return;
-            const nome=String(match[1] || '').trim(); const quantidade=legacyNumber(match[2]); const preco=legacyNumber(match[3]); const total=legacyNumber(match[4]);
-            if(nome && quantidade>0 && preco>=0)items.push({nome,quantidade,preco,total:Number.isFinite(total)?total:quantidade*preco});
-        });
-        return { location:locationMatch?.[1]?.trim() || '', dateText:dateMatch?.[1]?.trim() || '', total:totalMatch?legacyNumber(totalMatch[1]):0, items };
-    };
-
-    const normalizeLegacyReport = (legacyId, raw, sourceUid) => {
-        const source=raw && typeof raw==='object'?raw:{}; const parsed=parseLegacyReportContent(source.content);
-        const location=String(source.location || parsed.location || 'Não informado').trim().slice(0,160) || 'Não informado';
-        let createdAt=String(source.createdAt || '').trim(); let date=new Date(createdAt);
-        if(!createdAt || Number.isNaN(date.getTime())){date=parsePtBrDateTime(parsed.dateText) || new Date(legacyPushTimestamp(legacyId) || Date.now());createdAt=date.toISOString();}
-        const items=parsed.items; let total=legacyNumber(source.total); if(!(total>=0))total=0; if(!total && parsed.total)total=parsed.total; if(!total && items.length)total=items.reduce((sum,i)=>sum+(i.total||i.quantidade*i.preco),0);
-        const baseContent=String(source.content || '').trim();
-        const content=baseContent?legacyReportTextWithEdits({content:baseContent},location,''):buildReportText({location,items,total,createdAt,note:''});
-        const report={
-            content, location, total:Number(total||0), createdAt, purchaseAt:createdAt, note:'', editCount:0,
-            sourceType:'legacy_firebase_import', sourceSystem:LEGACY_FIREBASE.sourceSystem, legacyProjectId:LEGACY_FIREBASE.projectId,
-            legacyUserUid:sourceUid, legacyReportId:legacyId, importedAt:new Date().toISOString(), formatVersion:items.length?2:1
-        };
-        if(items.length){report.items=items.map(i=>({nome:i.nome,quantidade:i.quantidade,preco:i.preco,total:i.total||i.quantidade*i.preco}));report.legacyItemNamesMayBeTruncated=true;}
-        return report;
-    };
-
-    const legacyHash = (value) => {
+    const receiptHash = (value) => {
         let hash=2166136261;
         for(const ch of String(value || '')){hash^=ch.charCodeAt(0);hash=Math.imul(hash,16777619);}
         return (hash>>>0).toString(36);
     };
 
-    const legacyStatus = (message, type='') => {
-        if(!ui.legacyImportStatus)return;
-        ui.legacyImportStatus.className=`legacy-import-status${type?` ${type}`:''}`;
-        ui.legacyImportStatus.textContent=message;
+    const receiptMoney = (value) => {
+        if(typeof value==='number')return Number.isFinite(value)?value:0;
+        let text=String(value ?? '').trim().replace(/R\$/gi,'').replace(/[^\d,.-]/g,'');
+        if(!text)return 0;
+        const negative=text.startsWith('-'); text=text.replace(/-/g,'');
+        if(text.includes(',')){text=text.replace(/\./g,'').replace(',','.');}
+        else if((text.match(/\./g)||[]).length>1){text=text.replace(/\./g,'');}
+        const n=Number(text); return Number.isFinite(n)?(negative?-n:n):0;
     };
 
-    const resetLegacyImport = () => {
-        state.legacyImport={sourceUid:null,found:0,duplicates:0,pending:[],imported:0};
-        ui.legacyImportPassword.value=''; ui.legacyImportLogin.hidden=false; ui.legacyImportResult.hidden=true; ui.legacyImportConfirm.hidden=true;
-        ui.legacyImportSearch.hidden=false; ui.legacyImportSearch.disabled=false; ui.legacyImportConfirm.disabled=false;
-        ui.legacyImportPreview.replaceChildren(); ui.legacyImportKpis.replaceChildren();
-        legacyStatus('Informe o acesso da antiga Lista Inteligente para localizar as compras.');
+    const receiptDateTimeLocal = (iso) => {
+        const d=new Date(iso || Date.now()); if(Number.isNaN(d.getTime()))return '';
+        const p=(n)=>String(n).padStart(2,'0');
+        return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
     };
 
-    const openLegacyImport = () => {
-        resetLegacyImport();
-        ui.legacyImportEmail.value=auth.currentUser?.email || '';
-        ui.legacyImportModal.classList.add('visible');
-        setTimeout(()=>{(ui.legacyImportEmail.value?ui.legacyImportPassword:ui.legacyImportEmail)?.focus?.();},80);
+    const receiptStatus = (message, type='') => {
+        if(!ui.receiptStatus)return;
+        ui.receiptStatus.className=`receipt-status${type?` ${type}`:''}`;
+        ui.receiptStatus.textContent=message;
     };
 
-    const renderLegacyImportPreview = () => {
-        const data=state.legacyImport;
-        ui.legacyImportKpis.innerHTML=`<div class="legacy-import-kpi"><strong>${data.found}</strong>encontradas</div><div class="legacy-import-kpi"><strong>${data.duplicates}</strong>já importadas</div><div class="legacy-import-kpi"><strong>${data.pending.length}</strong>novas</div>`;
-        const fragment=document.createDocumentFragment();
-        data.pending.slice().sort((a,b)=>new Date(b.report.createdAt)-new Date(a.report.createdAt)).slice(0,8).forEach(({report})=>{
-            const row=document.createElement('div');row.className='legacy-import-preview-row';
-            const safeLocation=window.MercadorIA?.escapeHtml?window.MercadorIA.escapeHtml(report.location || 'Não informado'):String(report.location || 'Não informado');
-            row.innerHTML=`<strong>${safeLocation}</strong><span>${new Date(report.createdAt).toLocaleString('pt-BR')} · R$ ${Number(report.total||0).toFixed(2)}${report.items?.length?` · ${report.items.length} item(ns) recuperado(s)`:''}</span>`;
-            fragment.appendChild(row);
+    const setReceiptProgress = (value, show=true) => {
+        if(!ui.receiptProgress || !ui.receiptProgressBar)return;
+        ui.receiptProgress.hidden=!show;
+        ui.receiptProgressBar.style.width=`${Math.max(0,Math.min(100,Number(value)||0))}%`;
+    };
+
+    const resetReceiptImport = () => {
+        (state.receiptImport.urls || []).forEach((url)=>{try{URL.revokeObjectURL(url);}catch(_){}});
+        state.receiptImport={files:[],urls:[],rawText:'',pages:[],parsed:null,ocrConfidence:0,reading:false};
+        ui.receiptCameraInput.value=''; ui.receiptGalleryInput.value=''; ui.receiptImages.replaceChildren(); ui.receiptImages.hidden=true;
+        ui.receiptReview.hidden=true; ui.receiptItems.replaceChildren(); ui.receiptSave.hidden=true; ui.receiptRead.disabled=true;
+        ui.receiptMarket.value=''; ui.receiptDate.value=''; ui.receiptCnpj.value=''; ui.receiptTotal.value=''; ui.receiptNote.value='';
+        setReceiptProgress(0,false); receiptStatus('Selecione uma foto nítida da nota. Em cupons longos, você pode adicionar mais de uma foto.');
+    };
+
+    const openReceiptImport = () => { resetReceiptImport(); ui.receiptImportModal.classList.add('visible'); };
+
+    const renderReceiptImages = () => {
+        ui.receiptImages.replaceChildren();
+        if(!state.receiptImport.files.length){ui.receiptImages.hidden=true;ui.receiptRead.disabled=true;return;}
+        ui.receiptImages.hidden=false;
+        state.receiptImport.urls.forEach((url,index)=>{
+            const wrap=document.createElement('div');wrap.className='receipt-thumb';
+            wrap.innerHTML=`<img src="${url}" alt="Foto ${index+1} da nota"><button type="button" data-remove-receipt-image="${index}" aria-label="Remover foto">✕</button>`;
+            ui.receiptImages.appendChild(wrap);
         });
-        if(data.pending.length>8){const row=document.createElement('div');row.className='legacy-import-preview-row';row.textContent=`+ ${data.pending.length-8} compras adicionais prontas para importar.`;fragment.appendChild(row);}
-        ui.legacyImportPreview.replaceChildren(fragment); ui.legacyImportResult.hidden=false;
-        ui.legacyImportConfirm.hidden=!data.pending.length; ui.legacyImportConfirm.textContent=data.pending.length?`Importar ${data.pending.length} compra${data.pending.length===1?'':'s'}`:'Nada novo para importar';
+        ui.receiptRead.disabled=false;
+        receiptStatus(`${state.receiptImport.files.length} foto${state.receiptImport.files.length===1?'':'s'} selecionada${state.receiptImport.files.length===1?'':'s'}. Toque em “Ler nota”.`);
     };
 
-    const legacyAuthErrorMessage = (code) => {
-        const c=String(code || '');
-        if(c.includes('INVALID_LOGIN_CREDENTIALS')||c.includes('EMAIL_NOT_FOUND')||c.includes('INVALID_PASSWORD'))return 'E-mail ou senha da lista antiga não conferem.';
-        if(c.includes('TOO_MANY_ATTEMPTS'))return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
-        if(c.includes('USER_DISABLED'))return 'Essa conta antiga está desativada.';
-        return 'Não foi possível autenticar na lista antiga.';
+    const addReceiptFiles = (files) => {
+        const incoming=[...(files || [])].filter((f)=>String(f.type||'').startsWith('image/'));
+        if(!incoming.length){receiptStatus('Selecione uma imagem válida da nota.','error');return;}
+        for(const file of incoming){
+            if(state.receiptImport.files.length>=RECEIPT_OCR.maxImages)break;
+            if(file.size>RECEIPT_OCR.maxFileBytes){receiptStatus(`A imagem “${file.name || 'selecionada'}” é muito grande. Limite: 15 MB por foto.`,'error');continue;}
+            state.receiptImport.files.push(file); state.receiptImport.urls.push(URL.createObjectURL(file));
+        }
+        renderReceiptImages();
     };
 
-    const searchLegacyHistory = async () => {
-        const email=ui.legacyImportEmail.value.trim(); const password=ui.legacyImportPassword.value;
-        if(!email || !password){legacyStatus('Informe o e-mail e a senha usados na lista antiga.','error');return;}
-        ui.legacyImportSearch.disabled=true; ui.legacyImportConfirm.hidden=true; legacyStatus('Conectando ao sistema antigo e localizando seus relatórios…');
-        try{
-            const authResponse=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(LEGACY_FIREBASE.apiKey)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password,returnSecureToken:true}),cache:'no-store'});
-            const authData=await authResponse.json().catch(()=>({}));
-            if(!authResponse.ok || !authData.idToken || !authData.localId)throw new Error(legacyAuthErrorMessage(authData?.error?.message));
-            ui.legacyImportPassword.value='';
-            legacyStatus('Conta antiga localizada. Lendo somente o histórico de compras…');
-            const reportsResponse=await fetch(`${LEGACY_FIREBASE.databaseURL}/purchase_reports/${encodeURIComponent(authData.localId)}.json?auth=${encodeURIComponent(authData.idToken)}`,{cache:'no-store'});
-            const legacyData=await reportsResponse.json().catch(()=>null);
-            if(!reportsResponse.ok || (legacyData && typeof legacyData==='object' && legacyData.error))throw new Error('O Firebase antigo não permitiu ler esse histórico. Confirme se é a mesma conta usada na lista antiga.');
-            const sourceRows=legacyData && typeof legacyData==='object'?Object.entries(legacyData):[];
-            const currentSnap=await reportsRef.once('value'); const current=currentSnap.val() || {};
-            const importedIds=new Set(Object.values(current).filter((r)=>r && r.sourceType==='legacy_firebase_import' && r.legacyProjectId===LEGACY_FIREBASE.projectId && r.legacyReportId).map((r)=>String(r.legacyReportId)));
-            const pending=[]; let duplicates=0;
-            for(const [legacyId,raw] of sourceRows){
-                if(importedIds.has(String(legacyId))){duplicates++;continue;}
-                let targetKey=String(legacyId);
-                if(current[targetKey]){
-                    const fallback=`legacy_${legacyHash(`${authData.localId}:${legacyId}`)}`;
-                    if(current[fallback] && current[fallback].sourceType==='legacy_firebase_import' && current[fallback].legacyReportId===legacyId){duplicates++;continue;}
-                    targetKey=fallback;
+    let tesseractLoadPromise=null;
+    const loadReceiptOcrEngine = () => {
+        if(window.Tesseract?.createWorker)return Promise.resolve(window.Tesseract);
+        if(tesseractLoadPromise)return tesseractLoadPromise;
+        tesseractLoadPromise=new Promise((resolve,reject)=>{
+            const script=document.createElement('script'); script.src=RECEIPT_OCR.scriptUrl; script.async=true; script.crossOrigin='anonymous';
+            script.onload=()=>window.Tesseract?.createWorker?resolve(window.Tesseract):reject(new Error('O leitor OCR não inicializou.'));
+            script.onerror=()=>reject(new Error('Não foi possível carregar o leitor da nota. Verifique sua conexão.'));
+            document.head.appendChild(script);
+        });
+        return tesseractLoadPromise;
+    };
+
+    const preprocessReceiptImage = (file) => new Promise((resolve,reject)=>{
+        const img=new Image(); const url=URL.createObjectURL(file);
+        img.onload=()=>{
+            try{
+                const maxW=1800,maxH=3600; const scale=Math.min(1,maxW/img.naturalWidth,maxH/img.naturalHeight);
+                const w=Math.max(1,Math.round(img.naturalWidth*scale)),h=Math.max(1,Math.round(img.naturalHeight*scale));
+                const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const ctx=canvas.getContext('2d',{willReadFrequently:true});
+                ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
+                const image=ctx.getImageData(0,0,w,h),data=image.data,hist=new Uint32Array(256);
+                for(let i=0;i<data.length;i+=4){const g=Math.max(0,Math.min(255,Math.round(.299*data[i]+.587*data[i+1]+.114*data[i+2])));hist[g]++;}
+                const pixels=w*h,lowTarget=pixels*.025,highTarget=pixels*.975;let acc=0,low=0,high=255;
+                for(let i=0;i<256;i++){acc+=hist[i];if(acc>=lowTarget){low=i;break;}} acc=0;
+                for(let i=0;i<256;i++){acc+=hist[i];if(acc>=highTarget){high=i;break;}} if(high-low<45){low=Math.max(0,low-25);high=Math.min(255,high+25);}
+                const range=Math.max(1,high-low);
+                for(let i=0;i<data.length;i+=4){let g=Math.round(.299*data[i]+.587*data[i+1]+.114*data[i+2]);g=Math.max(0,Math.min(255,Math.round((g-low)*255/range)));data[i]=data[i+1]=data[i+2]=g;data[i+3]=255;}
+                ctx.putImageData(image,0,0); resolve(canvas.toDataURL('image/jpeg',.94));
+            }catch(error){reject(error);}finally{URL.revokeObjectURL(url);}
+        };
+        img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('Não consegui abrir uma das imagens. Use JPG, PNG ou uma foto feita pela câmera.'));};
+        img.src=url;
+    });
+
+    const normalizeReceiptLine = (line) => String(line || '').replace(/[\u00A0\t]+/g,' ').replace(/\s{2,}/g,' ').trim();
+    const receiptMoneyTokenRegex = /(?:R\$\s*)?-?\d{1,5}(?:\.\d{3})*(?:,\d{2})|(?:R\$\s*)?-?\d{1,5}\.\d{2}/gi;
+    const receiptNoise = (line) => {
+        const x=normalizeItemName(line);
+        if(!x)return true;
+        return /(?:documento auxiliar|nota fiscal|nfce|nfc e|sat|cupom fiscal|consumidor|cnpj|cpf|chave de acesso|protocolo|autorizacao|tribut|imposto|operador|caixa|forma de pagamento|pagamento|cartao|credito|debito|pix|dinheiro|troco|valor recebido|subtotal|total a pagar|valor total|total r\$|qtd total|quantidade total|itens vendidos|economia|desconto total|acrescimo|volte sempre|obrigado|site|www\.|telefone|fone|cep\b)/i.test(x);
+    };
+
+    const cleanReceiptProductName = (value) => {
+        let s=normalizeReceiptLine(value)
+            .replace(/^\s*\d{1,4}\s*[-.)]?\s*/,'')
+            .replace(/\b\d{8,14}\b/g,' ')
+            .replace(/\b(?:COD(?:IGO)?|ITEM)\s*[:.-]?\s*\d+\b/gi,' ')
+            .replace(/\s{2,}/g,' ').replace(/^[\-–—.:;]+|[\-–—.:;]+$/g,'').trim();
+        if(s.length>120)s=s.slice(0,120).trim();
+        return s;
+    };
+
+    const isReceiptProductCandidate = (line) => {
+        const s=cleanReceiptProductName(line);
+        if(s.length<3 || receiptNoise(s))return false;
+        const letters=(s.match(/[A-Za-zÀ-ÿ]/g)||[]).length;
+        return letters>=3 && letters>=Math.max(3,Math.floor(s.length*.22));
+    };
+
+    const extractReceiptDate = (text) => {
+        const patterns=[
+            /(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})[^\n\d]{0,12}(\d{1,2}:\d{2}(?::\d{2})?)/,
+            /(?:data|emissao|emissão)\s*[:.-]?\s*(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})(?:[^\n\d]{0,12}(\d{1,2}:\d{2}(?::\d{2})?))?/i,
+            /(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/
+        ];
+        for(const rx of patterns){const m=String(text||'').match(rx);if(m){const d=parsePtBrDateTime(`${m[1]} ${m[2]||'12:00'}`);if(d)return d.toISOString();}}
+        return null;
+    };
+
+    const extractReceiptMarket = (lines) => {
+        const candidates=[];
+        lines.slice(0,18).forEach((line,index)=>{
+            const s=cleanReceiptProductName(line);receiptMoneyTokenRegex.lastIndex=0;const hasMoney=receiptMoneyTokenRegex.test(s);receiptMoneyTokenRegex.lastIndex=0;if(!isReceiptProductCandidate(s)||hasMoney)return;
+            const n=normalizeItemName(s); if(/^(rua|r |avenida|av |rodovia|bairro|cidade|loja n|unidade|ie |im |inscricao|endereco)/i.test(n))return;
+            let score=50-index*1.5; const words=s.split(/\s+/).length;score+=Math.min(18,words*3); if(s===s.toUpperCase())score+=5; if(/mercad|supermerc|atacad|hiper|assai|muffato|carrefour|mix|loja/i.test(n))score+=22;
+            candidates.push({s,score});
+        });
+        candidates.sort((a,b)=>b.score-a.score);return candidates[0]?.s || 'Não informado';
+    };
+
+    const extractReceiptTotal = (lines) => {
+        let best={value:0,score:-1,line:''};
+        lines.forEach((line,index)=>{
+            const n=normalizeItemName(line); receiptMoneyTokenRegex.lastIndex=0;const tokens=[...String(line).matchAll(receiptMoneyTokenRegex)].map((m)=>receiptMoney(m[0]));receiptMoneyTokenRegex.lastIndex=0;
+            if(!tokens.length)return;
+            let score=-1;
+            if(/total a pagar|valor a pagar|total pagar/.test(n))score=120;
+            else if(/valor total|total r\$|\btotal\b/.test(n) && !/subtotal|tribut|desconto/.test(n))score=100;
+            else if(index>lines.length*.85 && /a pagar|pagar/.test(n))score=90;
+            if(score>=0){score+=index/Math.max(1,lines.length)*10; const value=tokens[tokens.length-1]; if(value>=0 && score>best.score)best={value,score,line};}
+        });
+        return best.value;
+    };
+
+    const parseReceiptItems = (lines) => {
+        const items=[]; let pendingName='';
+        const pushItem=(name,qty,unit,total,confidence,sourceLine)=>{
+            name=cleanReceiptProductName(name);qty=Number(qty);unit=Number(unit);total=Number(total||qty*unit);
+            if(!isReceiptProductCandidate(name)||!(qty>0)||!(unit>=0)||!Number.isFinite(total))return;
+            const expected=qty*unit; if(total<=0)total=expected;
+            if(Math.abs(expected-total)>Math.max(.08,Math.abs(total)*.025))confidence=Math.max(.45,confidence-.18);
+            items.push({nome:name,quantidade:qty,preco:unit,total,confidence:Math.max(.35,Math.min(1,confidence)),sourceLine:normalizeReceiptLine(sourceLine).slice(0,180)});
+            pendingName='';
+        };
+        for(let i=0;i<lines.length;i++){
+            const line=normalizeReceiptLine(lines[i]);if(!line)continue;
+            let m=line.match(/(?:QTD|QTDE|QUANTIDADE)\s*[:.]?\s*(\d+(?:[.,]\d{1,3})?).*?(?:VL\.?\s*UNIT|VLR\.?\s*UNIT|VALOR\s*UNIT)\s*[:.]?\s*(?:R\$)?\s*([\d.,]+).*?(?:VL\.?\s*TOTAL|VLR\.?\s*TOTAL|VALOR\s*TOTAL)\s*[:.]?\s*(?:R\$)?\s*([\d.,]+)/i);
+            if(m && pendingName){pushItem(pendingName,receiptMoney(m[1]),receiptMoney(m[2]),receiptMoney(m[3]),.96,line);continue;}
+            m=line.match(/(\d+(?:[.,]\d{1,3})?)\s*(?:UN|UND|UNID|KG|G|L|LT|ML|PC|PCT|CX|FD|BDJ|PT)?\s*[xX×]\s*(?:R\$)?\s*([\d.,]+)(?:\s+(?:R\$)?\s*([\d.,]+))?/i);
+            if(m){
+                const prefix=line.slice(0,m.index).trim(); const name=isReceiptProductCandidate(prefix)?prefix:pendingName;
+                if(name){const qty=receiptMoney(m[1]),unit=receiptMoney(m[2]),total=m[3]?receiptMoney(m[3]):qty*unit;pushItem(name,qty,unit,total,.94,line);continue;}
+            }
+            if(!receiptNoise(line)){
+                receiptMoneyTokenRegex.lastIndex=0;const moneyMatches=[...line.matchAll(receiptMoneyTokenRegex)];receiptMoneyTokenRegex.lastIndex=0;
+                if(moneyMatches.length){
+                    const last=moneyMatches[moneyMatches.length-1]; const price=receiptMoney(last[0]); const prefix=line.slice(0,last.index).trim();
+                    const name=isReceiptProductCandidate(prefix)?prefix:pendingName;
+                    if(name && price>=0){pushItem(name,1,price,price,prefix? .76:.70,line);continue;}
                 }
-                pending.push({legacyId,targetKey,report:normalizeLegacyReport(legacyId,raw,authData.localId)});
+                if(isReceiptProductCandidate(line))pendingName=line;
             }
-            state.legacyImport={sourceUid:authData.localId,found:sourceRows.length,duplicates,pending,imported:0};
-            ui.legacyImportLogin.hidden=true; ui.legacyImportSearch.hidden=true; renderLegacyImportPreview();
-            legacyStatus(pending.length?`${pending.length} compra${pending.length===1?'':'s'} pronta${pending.length===1?'':'s'} para importar. Nada foi gravado ainda.`:`O histórico antigo já está importado. Nenhuma compra nova foi encontrada.`,pending.length?'success':'');
-        }catch(error){console.error('Falha ao buscar histórico antigo:',error);legacyStatus(error.message || 'Não foi possível buscar o histórico antigo.','error');}
-        finally{ui.legacyImportSearch.disabled=false;}
+        }
+        const dedup=[];
+        for(const item of items){const prev=dedup[dedup.length-1];const sig=(x)=>`${normalizeItemName(x.nome)}|${Number(x.quantidade).toFixed(3)}|${Number(x.preco).toFixed(2)}`;if(prev&&sig(prev)===sig(item))continue;dedup.push(item);}
+        return dedup;
     };
 
-    const importLegacyHistory = async () => {
-        const rows=state.legacyImport.pending || []; if(!rows.length)return;
-        ui.legacyImportConfirm.disabled=true; ui.legacyImportSearch.disabled=true;
-        let imported=0;
+    const parseReceiptText = (pages, ocrConfidence=0) => {
+        const raw=pages.join('\n\n'); const lines=raw.split(/\r?\n/).map(normalizeReceiptLine).filter(Boolean);
+        const cnpjMatch=raw.match(/CNPJ\s*[:.-]?\s*(\d{2}[.\s]?\d{3}[.\s]?\d{3}[\/\s]?\d{4}[-\s]?\d{2})/i) || raw.match(/\b(\d{2}[.]\d{3}[.]\d{3}[\/]\d{4}[-]\d{2})\b/);
+        const market=extractReceiptMarket(lines),dateDetected=extractReceiptDate(raw),createdAt=dateDetected||new Date().toISOString(),declaredTotal=extractReceiptTotal(lines),items=parseReceiptItems(lines);
+        const computed=items.reduce((s,i)=>s+Number(i.total||i.quantidade*i.preco),0); const total=declaredTotal>0?declaredTotal:computed;
+        const diff=Math.abs(total-computed); const warnings=[];
+        if(market==='Não informado')warnings.push('mercado não identificado'); if(!dateDetected)warnings.push('data não identificada'); if(!items.length)warnings.push('nenhum item identificado'); if(!(total>0))warnings.push('total não identificado');
+        if(items.length && total>0 && diff>Math.max(.15,total*.02))warnings.push(`itens somam R$ ${computed.toFixed(2)} e a nota indica R$ ${total.toFixed(2)}`);
+        const itemQuality=items.length?items.reduce((s,i)=>s+i.confidence,0)/items.length:0;
+        let confidence=(market!=='Não informado'?14:0)+(total>0?18:0)+(dateDetected?12:0)+Math.min(42,itemQuality*42)+(ocrConfidence/100)*14;confidence=Math.max(0,Math.min(100,Math.round(confidence)));
+        return {market,createdAt,cnpj:cnpjMatch?.[1]?.replace(/\s/g,'')||'',total,declaredTotal,computedTotal:computed,items,confidence,warnings,rawText:raw};
+    };
+
+    const appendReceiptItemRow = (item={nome:'',quantidade:1,preco:0,confidence:1}) => {
+        const row=document.createElement('div'); const conf=Number(item.confidence ?? 1); row.className=`receipt-item-row ${conf<.68?'low':conf<.86?'medium':''}`;
+        const safe=window.MercadorIA?.escapeHtml?window.MercadorIA.escapeHtml(item.nome||''):String(item.nome||'').replace(/"/g,'&quot;');
+        row.innerHTML=`<input data-receipt-name aria-label="Produto" value="${safe}" placeholder="Produto"><input data-receipt-qty aria-label="Quantidade" type="number" min="0.001" step="0.001" value="${Number(item.quantidade||1)}"><input data-receipt-price aria-label="Preço unitário" type="number" min="0" step="0.01" value="${Number(item.preco||0).toFixed(2)}"><button type="button" class="receipt-item-remove" data-remove-receipt-item aria-label="Remover item">✕</button><div class="receipt-item-confidence">Leitura: <strong>${Math.round(conf*100)}%</strong>${conf<.68?' · confira este item':''}</div>`;
+        ui.receiptItems.appendChild(row);
+    };
+
+    const collectReceiptItems = () => [...ui.receiptItems.querySelectorAll('.receipt-item-row')].map((row)=>({
+        nome:String(row.querySelector('[data-receipt-name]')?.value||'').trim(),quantidade:Number(row.querySelector('[data-receipt-qty]')?.value||0),preco:Number(row.querySelector('[data-receipt-price]')?.value||0)
+    })).filter((i)=>i.nome&&i.quantidade>0&&i.preco>=0).map((i)=>({...i,total:i.quantidade*i.preco}));
+
+    const updateReceiptReconcile = () => {
+        if(ui.receiptReview.hidden)return;
+        const items=collectReceiptItems(),computed=items.reduce((s,i)=>s+i.total,0),declared=Number(ui.receiptTotal.value||0),reference=declared>0?declared:computed,diff=Math.abs(reference-computed);
+        const ok=diff<=Math.max(.10,reference*.01);ui.receiptReconcile.className=`receipt-reconcile ${ok?'ok':'warning'}`;
+        ui.receiptReconcile.textContent=ok?`✓ Conferência: ${items.length} item(ns) somam R$ ${computed.toFixed(2)}.`:`⚠ Itens somam R$ ${computed.toFixed(2)}; total informado R$ ${reference.toFixed(2)}. Isso pode ser desconto/acréscimo da nota ou leitura a revisar.`;
+    };
+
+    const renderReceiptReview = (parsed) => {
+        ui.receiptMarket.value=parsed.market==='Não informado'?'':parsed.market; ui.receiptDate.value=receiptDateTimeLocal(parsed.createdAt); ui.receiptCnpj.value=parsed.cnpj||''; ui.receiptTotal.value=Number(parsed.total||0).toFixed(2); ui.receiptNote.value='';
+        ui.receiptItems.replaceChildren(); (parsed.items||[]).forEach(appendReceiptItemRow); if(!parsed.items?.length)appendReceiptItemRow({confidence:.4});
+        const low=(parsed.items||[]).filter((i)=>i.confidence<.68).length;
+        ui.receiptKpis.innerHTML=`<div class="receipt-kpi"><strong>${parsed.items.length}</strong>itens</div><div class="receipt-kpi"><strong>${parsed.confidence}%</strong>confiança</div><div class="receipt-kpi"><strong>${low}</strong>revisar</div>`;
+        ui.receiptReview.hidden=false;ui.receiptSave.hidden=false;updateReceiptReconcile();
+        receiptStatus(parsed.warnings.length?`Leitura concluída. Confira: ${parsed.warnings.join(' · ')}.`:'Leitura concluída. Confira os dados e salve a compra.',parsed.warnings.length?'warning':'success');
+    };
+
+    const readReceiptPhotos = async () => {
+        if(!state.receiptImport.files.length){receiptStatus('Adicione pelo menos uma foto da nota.','error');return;}
+        if(state.receiptImport.reading)return; state.receiptImport.reading=true; ui.receiptRead.disabled=true;ui.receiptSave.hidden=true;ui.receiptReview.hidden=true;setReceiptProgress(2,true);receiptStatus('Preparando leitor de cupom…');
+        let worker=null;
         try{
-            for(let start=0;start<rows.length;start+=75){
-                const chunk=rows.slice(start,start+75); const updates={};
-                chunk.forEach(({targetKey,report})=>{updates[`purchase_reports/${userId}/${targetKey}`]=report;});
-                legacyStatus(`Importando ${Math.min(start+chunk.length,rows.length)} de ${rows.length} compras…`);
-                await database.ref().update(updates); imported+=chunk.length;
+            const Tesseract=await loadReceiptOcrEngine(); let pageIndex=0,currentProgress=0;
+            worker=await Tesseract.createWorker('por',1,{logger:(m)=>{if(m.status==='recognizing text'){currentProgress=Number(m.progress||0);const overall=((pageIndex+currentProgress)/state.receiptImport.files.length)*100;setReceiptProgress(Math.max(8,overall));receiptStatus(`Lendo foto ${Math.min(pageIndex+1,state.receiptImport.files.length)} de ${state.receiptImport.files.length}… ${Math.round(currentProgress*100)}%`);}}});
+            await worker.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1'});
+            const pages=[];let confidenceSum=0;
+            for(pageIndex=0;pageIndex<state.receiptImport.files.length;pageIndex++){
+                receiptStatus(`Preparando foto ${pageIndex+1} de ${state.receiptImport.files.length}…`); const image=await preprocessReceiptImage(state.receiptImport.files[pageIndex]);
+                const result=await worker.recognize(image); pages.push(String(result?.data?.text||''));confidenceSum+=Number(result?.data?.confidence||0);setReceiptProgress(((pageIndex+1)/state.receiptImport.files.length)*100);
             }
-            state.legacyImport.imported=imported; state.legacyImport.pending=[]; state.legacyImport.duplicates+=imported;
-            legacyStatus(`${imported} compra${imported===1?'':'s'} importada${imported===1?'':'s'} com sucesso. O histórico antigo continua preservado no sistema de origem.`, 'success');
-            ui.legacyImportConfirm.hidden=true; ui.legacyImportCancel.textContent='Concluir';
-            state.reportsLoaded=false; state.reportsLoadedAt=0; await loadRecentReports({force:true,silent:true});
-            window.MercadorIA?.toast?.(`${imported} compra${imported===1?'':'s'} importada${imported===1?'':'s'} do histórico antigo.`,'success',6000);
-        }catch(error){console.error('Falha ao importar histórico antigo:',error);legacyStatus(`A importação parou após ${imported} compra${imported===1?'':'s'}. Você pode tentar novamente; as já importadas não serão duplicadas.`,'error');state.legacyImport.pending=rows.slice(imported);renderLegacyImportPreview();}
-        finally{ui.legacyImportConfirm.disabled=false;ui.legacyImportSearch.disabled=false;}
+            state.receiptImport.pages=pages; state.receiptImport.rawText=pages.join('\n\n'); state.receiptImport.ocrConfidence=confidenceSum/Math.max(1,pages.length);
+            const parsed=parseReceiptText(pages,state.receiptImport.ocrConfidence);state.receiptImport.parsed=parsed;renderReceiptReview(parsed);setReceiptProgress(100,true);
+        }catch(error){console.error('Falha ao ler nota:',error);receiptStatus(error.message||'Não foi possível ler essa nota. Tente outra foto com boa luz e o papel reto.','error');setReceiptProgress(0,false);}
+        finally{if(worker){try{await worker.terminate();}catch(_){}}state.receiptImport.reading=false;ui.receiptRead.disabled=!state.receiptImport.files.length;}
+    };
+
+    const saveReceiptPurchase = async () => {
+        if(!state.receiptImport.parsed || !reportsRef)return;
+        const items=collectReceiptItems(); const location=ui.receiptMarket.value.trim().slice(0,160)||'Não informado'; const cnpj=ui.receiptCnpj.value.trim().slice(0,24); const note=ui.receiptNote.value.trim().slice(0,500);
+        const createdAtValue=ui.receiptDate.value; const d=createdAtValue?new Date(createdAtValue):new Date(); const createdAt=Number.isNaN(d.getTime())?new Date().toISOString():d.toISOString();
+        const computed=items.reduce((s,i)=>s+i.total,0); const declared=Number(ui.receiptTotal.value||0); const total=declared>0?declared:computed;
+        if(!items.length && !(total>0)){receiptStatus('Inclua pelo menos um item ou informe o total da compra.','error');return;}
+        const identityBase=[cnpj,createdAt.slice(0,16),total.toFixed(2),...items.map((i)=>`${normalizeItemName(i.nome)}:${i.quantidade.toFixed(3)}:${i.preco.toFixed(2)}`)].join('|');
+        const identityHash=receiptHash(identityBase); const reportKey=`receipt_${identityHash}`; ui.receiptSave.disabled=true;ui.receiptRead.disabled=true;receiptStatus('Salvando compra…');
+        try{
+            const existing=await reportsRef.child(reportKey).once('value');
+            if(existing.exists()){receiptStatus('Essa nota já foi registrada. Nenhuma compra duplicada foi criada.','warning');return;}
+            const importConfidence=Number(state.receiptImport.parsed.confidence||0); const importedAt=new Date().toISOString();
+            const reportItems=items.map((i,index)=>({...i,ocrConfidence:Number(state.receiptImport.parsed.items?.[index]?.confidence||0)}));
+            const reportData={
+                content:buildReportText({location,items:reportItems,total,createdAt,note}), location,total,createdAt,purchaseAt:createdAt,items:reportItems,note,editCount:0,createdBy:userId,formatVersion:3,
+                sourceType:'receipt_photo_ocr',importMethod:'camera_or_gallery',importedAt,receiptIdentityHash:identityHash,
+                receipt:{cnpj:cnpj||'',imageCount:state.receiptImport.files.length,ocrEngine:RECEIPT_OCR.engine,ocrVersion:RECEIPT_OCR.version,ocrConfidence:importConfidence,declaredTotal:Number(declared||0),computedItemsTotal:Number(computed||0),difference:Number((total-computed).toFixed(2)),rawTextHash:receiptHash(state.receiptImport.rawText)}
+            };
+            await reportsRef.child(reportKey).set(reportData); perfStore.rememberPurchase(reportItems,location);
+            if(state.reportsLoaded){const idx=state.reports.findIndex((r)=>r.id===reportKey);const row={...reportData,id:reportKey};if(idx>=0)state.reports[idx]=row;else state.reports.push(row);state.reportsLoadedAt=Date.now();}
+            const meta=perfStore.read('report-meta',{recentCount:0,limited:false});perfStore.write('report-meta',{recentCount:Math.min(50,Number(meta.recentCount||0)+1),limited:Boolean(meta.limited||Number(meta.recentCount||0)>=49),savedAt:Date.now()});
+            if(state.currentTab==='relatorios')render.reports(); render.tabs(); updatePurchaseLocationOptions(); receiptStatus('Compra registrada com sucesso.','success');
+            window.MercadorIA?.toast?.('Compra registrada pela nota.','success',5000); setTimeout(()=>{ui.receiptImportModal.classList.remove('visible');resetReceiptImport();},450);
+        }catch(error){console.error('Falha ao salvar compra da nota:',error);receiptStatus('Não foi possível salvar agora. Sua revisão continua na tela; confira a conexão e tente novamente.','error');}
+        finally{ui.receiptSave.disabled=false;ui.receiptRead.disabled=!state.receiptImport.files.length;}
     };
 
     const previewReportTextWithLocation = () => {
@@ -959,8 +1140,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const listEl = document.getElementById('lista-relatorios');
             if (!listEl) return;
             const fragment = document.createDocumentFragment();
-            const importCard=document.createElement('li'); importCard.className='legacy-import-card';
-            importCard.innerHTML=`<div class="legacy-import-card-head"><div><strong>📥 Importar histórico da lista antiga</strong><p>Recupere suas compras diretamente do Firebase da antiga Lista Inteligente, sem foto e sem redigitar.</p></div><button type="button" class="legacy-import-btn" data-open-legacy-import>Importar</button></div>`;
+            const importCard=document.createElement('li'); importCard.className='receipt-import-card';
+            importCard.innerHTML=`<div class="receipt-import-card-head"><div><strong>📸 Registrar compra pela nota</strong><p>Use a câmera ou a galeria. O Mercador IA lê o cupom, separa os itens e você confere antes de salvar.</p></div><button type="button" class="receipt-import-btn" data-open-receipt-import>Ler nota</button></div>`;
             fragment.appendChild(importCard);
             if (state.reportsLoading && !state.reports.length) {
                 const loading=document.createElement('div'); loading.className='light-loading'; loading.innerHTML='<span></span><span>Carregando relatórios recentes…</span>'; fragment.appendChild(loading);
@@ -1163,6 +1344,25 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
 
+    // Finalização idempotente: usa sempre o mesmo reportKey enquanto uma compra
+    // ainda não recebeu confirmação do servidor. Repetir o toque não duplica relatório.
+    const pendingFinalizeStorageKey = () => `mercador-ia:pending-finalize:${userId || 'anonymous'}`;
+    const readPendingFinalize = () => { try{return JSON.parse(localStorage.getItem(pendingFinalizeStorageKey())||'null');}catch(_){return null;} };
+    const writePendingFinalize = (value) => { try{localStorage.setItem(pendingFinalizeStorageKey(),JSON.stringify(value));}catch(_){} };
+    const clearPendingFinalize = () => { try{localStorage.removeItem(pendingFinalizeStorageKey());}catch(_){} };
+    const finalizeFingerprint = (comprados,adiados) => receiptHash([
+        ...comprados.map((i)=>`b:${i.id}`).sort(),
+        ...adiados.map((i)=>`a:${i.id}`).sort()
+    ].join('|'));
+    const setFinalizeState = (message,type='') => { if(!ui.finalizeState)return;ui.finalizeState.className=`finalize-state${type?` ${type}`:''}`;ui.finalizeState.textContent=message||''; };
+    const setFinalizeBusy = (busy) => { state.finalizeInFlight=Boolean(busy);ui.finalizePurchaseBtn.disabled=Boolean(busy);ui.closeModalBtn.disabled=Boolean(busy);ui.finalizePurchaseBtn.textContent=busy?'Salvando…':'Finalizar Compra'; };
+    const reconcilePendingFinalization = async () => {
+        const pending=readPendingFinalize();if(!pending?.reportKey||!reportsRef)return;
+        if(Date.now()-Number(pending.startedAt||0)>24*60*60*1000){clearPendingFinalize();return;}
+        try{const snap=await reportsRef.child(pending.reportKey).once('value');if(snap.exists()){clearPendingFinalize();window.MercadorIA?.toast?.('A última compra já estava sincronizada.','success',4500);}}catch(_){/* sem leitura extra insistente */}
+    };
+
+
     const interactions = {
         initDataListeners: () => {
             if (!listRef) return;
@@ -1177,6 +1377,9 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 render.currentList(true); render.tabs(); render.total();
             }
+
+            database.ref('.info/connected').on('value',(snapshot)=>{state.firebaseConnected=snapshot.val()===true;});
+            reconcilePendingFinalization();
 
             // Sincronização colaborativa incremental. Depois da carga inicial, cada aparelho
             // recebe somente o item alterado em vez de baixar/reprocessar a lista inteira.
@@ -1264,35 +1467,41 @@ document.addEventListener('DOMContentLoaded', () => {
             const total = comprados.reduce((acc,i)=>acc+(Number(i.preco)*Number(i.quantidade)),0);
             const previewItems = comprados.map(i=>({nome:i.nome,quantidade:Number(i.quantidade),preco:Number(i.preco)}));
             ui.reportPaper.textContent = buildReportText({location:'Não informado',items:previewItems,total,createdAt:new Date().toISOString(),note:''});
-            ui.purchaseLocationInput.value=''; updatePurchaseLocationOptions(); ui.reportModal.classList.add('visible');
+            ui.purchaseLocationInput.value=''; setFinalizeState(''); updatePurchaseLocationOptions(); ui.reportModal.classList.add('visible');
         },
         finalizeAndReset: async () => {
-            const comprados = state.itens.filter(i => i.status === 'comprado');
-            if (!comprados.length) { ui.reportModal.classList.remove('visible'); return; }
-            const location = ui.purchaseLocationInput.value.trim() || 'Não informado';
-            const createdAt = new Date().toISOString();
-            const items = comprados.map((i)=>({ nome:i.nome, quantidade:Number(i.quantidade), preco:Number(i.preco), total:Number(i.quantidade)*Number(i.preco) }));
-            const total = items.reduce((acc,i)=>acc+i.total,0);
-            const reportData = { content:buildReportText({location,items,total,createdAt,note:''}), location, total, createdAt, purchaseAt:createdAt, items, note:'', editCount:0, createdBy:userId, formatVersion:2 };
-            const reportKey = reportsRef.push().key;
-            const nextItems = state.itens.filter(i => i.status === 'adiado' || i.status === 'faltando').map((item)=>({ ...item, status:'faltando', preco:0, quantidade:1 }));
-            const rootUpdates = {};
-            rootUpdates[`purchase_reports/${userId}/${reportKey}`] = reportData;
-            state.itens.forEach((item)=>{ rootUpdates[`shopping_lists/${userId}/${item.id}`] = null; });
-            nextItems.forEach((item)=>{ const data={...item}; delete data.id; rootUpdates[`shopping_lists/${userId}/${item.id}`]=data; });
-            ui.finalizePurchaseBtn.disabled=true;
-            try {
+            if(state.finalizeInFlight)return;
+            const comprados=state.itens.filter((i)=>i.status==='comprado');
+            if(!comprados.length){ui.reportModal.classList.remove('visible');return;}
+            if(navigator.onLine===false || state.firebaseConnected===false){setFinalizeState('Sem conexão com o Firebase. A compra continua intacta; reconecte e tente novamente.','error');window.MercadorIA?.toast?.('Sem conexão para finalizar agora.','error',5000);return;}
+            const adiados=state.itens.filter((i)=>i.status==='adiado'); const location=ui.purchaseLocationInput.value.trim()||'Não informado'; const fingerprint=finalizeFingerprint(comprados,adiados);
+            let pending=readPendingFinalize();
+            if(!pending || pending.fingerprint!==fingerprint || !pending.reportKey){pending={fingerprint,reportKey:reportsRef.push().key,createdAt:new Date().toISOString(),startedAt:Date.now()};writePendingFinalize(pending);}
+            const createdAt=pending.createdAt; const items=comprados.map((i)=>({nome:i.nome,quantidade:Number(i.quantidade),preco:Number(i.preco),total:Number(i.quantidade)*Number(i.preco)})); const total=items.reduce((acc,i)=>acc+i.total,0);
+            const reportData={content:buildReportText({location,items,total,createdAt,note:''}),location,total,createdAt,purchaseAt:createdAt,items,note:'',editCount:0,createdBy:userId,formatVersion:2,finalizationId:pending.reportKey};
+            const rootUpdates={}; rootUpdates[`purchase_reports/${userId}/${pending.reportKey}`]=reportData;
+            // Somente diferenças: comprados saem; faltando não é tocado; adiados voltam à lista.
+            comprados.forEach((item)=>{rootUpdates[`shopping_lists/${userId}/${item.id}`]=null;});
+            adiados.forEach((item)=>{
+                if(item.status!=='faltando')rootUpdates[`shopping_lists/${userId}/${item.id}/status`]='faltando';
+                if(Number(item.preco||0)!==0)rootUpdates[`shopping_lists/${userId}/${item.id}/preco`]=0;
+                if(Number(item.quantidade||1)!==1)rootUpdates[`shopping_lists/${userId}/${item.id}/quantidade`]=1;
+            });
+            setFinalizeBusy(true);setFinalizeState(`Sincronizando ${comprados.length} item${comprados.length===1?'':'s'} e o relatório…`);
+            try{
                 await database.ref().update(rootUpdates);
-                perfStore.rememberPurchase(items, location);
-                state.itens = nextItems;
-                markListsDirty(); perfStore.saveList(); emitListState();
-                if (state.reportsLoaded) { state.reports.push({ ...reportData, id:reportKey }); state.reportsLoadedAt=Date.now(); }
-                const meta=perfStore.read('report-meta',{recentCount:0,limited:false}); perfStore.write('report-meta',{recentCount:Math.min(50,Number(meta.recentCount||0)+1),limited:Boolean(meta.limited||Number(meta.recentCount||0)>=49),savedAt:Date.now()});
-                render.currentList(true); render.total(); render.tabs(); renderSmartSuggestions(); updatePurchaseLocationOptions();
-                ui.reportModal.classList.remove('visible'); if(state.currentTab!=='faltando') interactions.switchTab('faltando');
-                window.MercadorIA?.toast?.('Compra finalizada e sincronizada em uma única operação.', 'success');
-            } catch(error) { console.error('Erro ao finalizar a compra:',error); window.MercadorIA?.toast?.('Não foi possível finalizar a compra. Verifique sua conexão e tente novamente.','error',7000) || alert('Ocorreu um erro.'); }
-            finally { ui.finalizePurchaseBtn.disabled=false; }
+                clearPendingFinalize(); perfStore.rememberPurchase(items,location);
+                const boughtIds=new Set(comprados.map((i)=>String(i.id))),deferredIds=new Set(adiados.map((i)=>String(i.id)));
+                state.itens=state.itens.filter((i)=>!boughtIds.has(String(i.id))).map((i)=>deferredIds.has(String(i.id))?{...i,status:'faltando',preco:0,quantidade:1}:i);
+                markListsDirty();perfStore.saveList();emitListState();
+                if(state.reportsLoaded){const idx=state.reports.findIndex((r)=>r.id===pending.reportKey);const row={...reportData,id:pending.reportKey};if(idx>=0)state.reports[idx]=row;else state.reports.push(row);state.reportsLoadedAt=Date.now();}
+                const meta=perfStore.read('report-meta',{recentCount:0,limited:false});perfStore.write('report-meta',{recentCount:Math.min(50,Number(meta.recentCount||0)+1),limited:Boolean(meta.limited||Number(meta.recentCount||0)>=49),savedAt:Date.now()});
+                render.currentList(true);render.total();render.tabs();renderSmartSuggestions();updatePurchaseLocationOptions();ui.reportModal.classList.remove('visible');if(state.currentTab!=='faltando')interactions.switchTab('faltando');setFinalizeState('');
+                window.MercadorIA?.toast?.('Compra finalizada e sincronizada.','success',4500);
+            }catch(error){
+                console.error('Erro ao finalizar a compra:',error);setFinalizeState('Não houve confirmação do servidor. Toque em Finalizar novamente: o mesmo ID será reutilizado e não haverá relatório duplicado.','error');
+                window.MercadorIA?.toast?.('Não confirmou a finalização. Sua operação está protegida contra duplicação; tente novamente.','error',7000);
+            }finally{setFinalizeBusy(false);}
         },
         showReport: (reportId) => {
             const report=state.reports.find(r=>r.id===reportId); if(!report)return;
@@ -1355,10 +1564,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click',(e)=>{if(!e.target.closest('#form-adicionar-item,#smart-suggestions') && ui.smartSuggestions)ui.smartSuggestions.hidden=true;});
     ui.keypad.addEventListener('click', e => { if (e.target.tagName === 'BUTTON') calculator.handleInput(e.target.textContent, e.target.dataset.action); });
     ui.tabs.addEventListener('click', e => { const btn=e.target.closest('.tab-btn'); if(btn) interactions.handleTabClick(btn.dataset.tab); });
-    document.getElementById('lista-relatorios').addEventListener('click', e => { const importBtn=e.target.closest('[data-open-legacy-import]'); if(importBtn){openLegacyImport();return;} const moreBtn=e.target.closest('[data-load-more-reports]'); if(moreBtn){loadMoreReports();return;} const deleteBtn=e.target.closest('[data-delete-report]'); if(deleteBtn){interactions.deleteReport(deleteBtn.dataset.deleteReport);return;} const editBtn=e.target.closest('[data-edit-report]'); if(editBtn){interactions.openReportEdit(editBtn.dataset.editReport);return;} const reportRow=e.target.closest('.report-item'); if(reportRow)interactions.showReport(reportRow.dataset.id); });
+    document.getElementById('lista-relatorios').addEventListener('click', e => { const importBtn=e.target.closest('[data-open-receipt-import]'); if(importBtn){openReceiptImport();return;} const moreBtn=e.target.closest('[data-load-more-reports]'); if(moreBtn){loadMoreReports();return;} const deleteBtn=e.target.closest('[data-delete-report]'); if(deleteBtn){interactions.deleteReport(deleteBtn.dataset.deleteReport);return;} const editBtn=e.target.closest('[data-edit-report]'); if(editBtn){interactions.openReportEdit(editBtn.dataset.editReport);return;} const reportRow=e.target.closest('.report-item'); if(reportRow)interactions.showReport(reportRow.dataset.id); });
     ui.appContainer.addEventListener('click', e => { if(e.target.closest('.item-offer-action,.offer-sheet-overlay'))return; const row=e.target.closest('.item-row'); if(!row)return; const id=row.dataset.id; const item=state.itens.find(i=>i.id===id); if(!item)return; if(e.target.closest('[data-item-delete]')){interactions.deleteItem(id);return;} if(e.target.closest('[data-item-defer]')){interactions.updateItem(id,{status:'adiado'});if(state.activeItemId===id)state.activeItemId=null;return;} if(e.target.closest('[data-item-restore]')){interactions.updateItem(id,{status:'faltando',preco:0,quantidade:1});return;} if(e.target.closest('[data-item-select]')){interactions.selectItem(id);return;} if(item.status==='faltando' && e.target.closest('.item-details'))interactions.selectItem(id); });
     ui.btnFinalizar.addEventListener('click', interactions.openReportModal);
-    ui.closeModalBtn.addEventListener('click', () => ui.reportModal.classList.remove('visible'));
+    ui.closeModalBtn.addEventListener('click', () => {if(!state.finalizeInFlight){setFinalizeState('');ui.reportModal.classList.remove('visible');}});
     ui.closeViewModalBtn.addEventListener('click', () => ui.reportViewModal.classList.remove('visible'));
     ui.editViewReportBtn.addEventListener('click',()=>{if(state.selectedReportId){ui.reportViewModal.classList.remove('visible');interactions.openReportEdit(state.selectedReportId);}});
     ui.cancelReportEditBtn.addEventListener('click',()=>ui.reportEditModal.classList.remove('visible'));
@@ -1366,10 +1575,19 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.addReportItemBtn.addEventListener('click',()=>appendReportEditItemRow());
     ui.reportEditItems.addEventListener('input',updateReportEditTotal);
     ui.reportEditItems.addEventListener('click',(e)=>{const btn=e.target.closest('[data-remove-edit-item]');if(btn){btn.closest('.report-edit-row')?.remove();updateReportEditTotal();}});
-    ui.legacyImportCancel.addEventListener('click',()=>ui.legacyImportModal.classList.remove('visible'));
-    ui.legacyImportSearch.addEventListener('click',searchLegacyHistory);
-    ui.legacyImportConfirm.addEventListener('click',importLegacyHistory);
-    ui.legacyImportPassword.addEventListener('keydown',(e)=>{if(e.key==='Enter'){e.preventDefault();searchLegacyHistory();}});
+
+    ui.receiptCancel.addEventListener('click',()=>{if(!state.receiptImport.reading){ui.receiptImportModal.classList.remove('visible');resetReceiptImport();}});
+    ui.receiptCameraBtn.addEventListener('click',()=>ui.receiptCameraInput.click());
+    ui.receiptGalleryBtn.addEventListener('click',()=>ui.receiptGalleryInput.click());
+    ui.receiptCameraInput.addEventListener('change',(e)=>{addReceiptFiles(e.target.files);e.target.value='';});
+    ui.receiptGalleryInput.addEventListener('change',(e)=>{addReceiptFiles(e.target.files);e.target.value='';});
+    ui.receiptImages.addEventListener('click',(e)=>{const btn=e.target.closest('[data-remove-receipt-image]');if(!btn)return;const idx=Number(btn.dataset.removeReceiptImage);if(!Number.isInteger(idx))return;try{URL.revokeObjectURL(state.receiptImport.urls[idx]);}catch(_){}state.receiptImport.files.splice(idx,1);state.receiptImport.urls.splice(idx,1);renderReceiptImages();});
+    ui.receiptRead.addEventListener('click',readReceiptPhotos);
+    ui.receiptSave.addEventListener('click',saveReceiptPurchase);
+    ui.receiptAddItem.addEventListener('click',()=>{appendReceiptItemRow();updateReceiptReconcile();});
+    ui.receiptItems.addEventListener('input',updateReceiptReconcile);
+    ui.receiptItems.addEventListener('click',(e)=>{const btn=e.target.closest('[data-remove-receipt-item]');if(btn){btn.closest('.receipt-item-row')?.remove();updateReceiptReconcile();}});
+    ui.receiptTotal.addEventListener('input',updateReceiptReconcile);
     ui.downloadReportBtn.addEventListener('click', interactions.downloadReport);
     ui.printReportBtn.addEventListener('click', interactions.printReport);
     ui.finalizePurchaseBtn.addEventListener('click', interactions.finalizeAndReset);
