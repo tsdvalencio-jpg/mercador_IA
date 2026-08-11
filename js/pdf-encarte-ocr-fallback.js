@@ -10,8 +10,8 @@
     return;
   }
 
-  const OCR_ENGINE_VERSION = '3.0.0-knowledge';
-  const KNOWLEDGE_SCHEMA_VERSION = 'mercador.encarte.knowledge.v1';
+  const OCR_ENGINE_VERSION = '3.1.0-knowledge-fidelity';
+  const KNOWLEDGE_SCHEMA_VERSION = 'mercador.encarte.knowledge.v2';
   const TESSERACT_VERSION = '5.1.1';
   const PDFJS_VERSION = base.PDFJS_VERSION || '5.7.284';
   const PDFJS_BASE = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}`;
@@ -227,37 +227,44 @@
 
   function priceCandidatesFromLines(lines, {pass='layout',medianWordHeight=16}={}) {
     const found=[];
+    const maxPriceWidth=Math.max(145,medianWordHeight*10.5);
+    const priceToken=(word)=>{
+      const raw=cleanText(word?.text||'');
+      if(!raw)return false;
+      if(currencyAnchor(word))return true;
+      const folded=fold(raw).replace(/\s+/g,'');
+      if(/^[,.;:]$/.test(folded))return true;
+      if(/^(?:R\$)?[0-9ILMOQ|]{1,5}(?:[,.;:][0-9ILMOQ|]{1,2})?$/.test(folded))return true;
+      return compactNumericToken(raw)!=='' && !/[A-HJ-KNPR-Z]/i.test(raw);
+    };
+
     lines.forEach((line,lineIndex)=>{
       const words=line.words||[];
       for(let i=0;i<words.length;i+=1){
-        for(let len=1;len<=6&&i+len<=words.length;len+=1){
+        if(!priceToken(words[i]))continue;
+        for(let len=1;len<=5&&i+len<=words.length;len+=1){
           const slice=words.slice(i,i+len);
+          if(slice.some((w)=>!priceToken(w)))break;
           const box=unionBoxes(slice);
-          if(!box||box.width>520)break;
+          if(!box||box.width>maxPriceWidth)break;
           const text=cleanText(slice.map((w)=>w.text).join(' '));
           const parsed=parseOcrMoney(text);
           if(!parsed)continue;
-          const hasCurrency=parsed.explicitCurrency||slice.some((w)=>/R\s*\$|R\$|\bRS\b/i.test(w.text));
-          if(!hasCurrency&&len>3)continue;
-          const confidence=slice.reduce((s,w)=>s+(Number(w.confidence)||0),0)/slice.length;
+          const hasCurrency=parsed.explicitCurrency||slice.some(currencyAnchor);
+          if(!hasCurrency&&len>2)continue;
+          const confidence=slice.reduce((sum,w)=>sum+(Number(w.confidence)||0),0)/slice.length;
           const scale=box.height/Math.max(1,medianWordHeight);
           found.push({price:parsed.price,box,words:slice,lineIndex,confidence,explicitCurrency:hasCurrency,text,pass,pattern:parsed.pattern,scale});
         }
       }
-      const parsedLine=parseOcrMoney(line.text);
-      if(parsedLine&&!found.some((p)=>p.lineIndex===lineIndex&&Math.abs(p.price-parsedLine.price)<.001)){
-        const scale=line.box.height/Math.max(1,medianWordHeight);
-        found.push({price:parsedLine.price,box:line.box,words:line.words,lineIndex,confidence:line.confidence,explicitCurrency:parsedLine.explicitCurrency,text:line.text,pass,pattern:parsedLine.pattern,scale});
-      }
     });
 
-    // Deduplica a mesma leitura dentro da mesma passagem.
     const dedup=[];
     found.sort((a,b)=>Number(b.explicitCurrency)-Number(a.explicitCurrency)||b.confidence-a.confidence||b.scale-a.scale||a.box.width-b.box.width).forEach((p)=>{
       const pc=center(p.box);
       const exists=dedup.some((x)=>{
         const xc=center(x.box);
-        return Math.abs(x.price-p.price)<.001&&Math.abs(xc.x-pc.x)<60&&Math.abs(xc.y-pc.y)<42;
+        return Math.abs(x.price-p.price)<.001&&Math.abs(xc.x-pc.x)<55&&Math.abs(xc.y-pc.y)<38;
       });
       if(!exists)dedup.push(p);
     });
@@ -265,7 +272,13 @@
   }
 
   function compactNumericToken(value) {
-    const raw=normalizeNumericOcr(value).replace(/[^0-9]/g,'');
+    const original=cleanText(value);
+    // Peso/volume/quantidade não podem virar parte de preço: 400g, 250ml, 3un etc.
+    const alpha=fold(original).replace(/[ILMOQ]/g,'').replace(/[^A-Z]/g,'');
+    if(alpha)return '';
+    const normalized=normalizeNumericOcr(original).replace(/\s+/g,'');
+    if(/[A-Z%]/.test(normalized.replace(/R\$?|RS/g,'')))return '';
+    const raw=normalized.replace(/[^0-9]/g,'');
     return /^\d{1,5}$/.test(raw)?raw:'';
   }
 
@@ -282,13 +295,15 @@
   function priceCandidatesFromWords(words,{pass='layout',medianWordHeight=16}={}) {
     const list=(words||[]).filter((w)=>w?.text&&w.width>0&&w.height>0);
     const found=[];
-    const maxX=Math.max(180,medianWordHeight*13.5);
-    const maxY=Math.max(62,medianWordHeight*3.2);
+    const maxX=Math.max(105,medianWordHeight*7.0);
+    const maxY=Math.max(48,medianWordHeight*2.5);
 
     const push=(price,parts,pattern)=>{
       if(!Number.isFinite(price)||price<=0||price>=10000||!parts?.length)return;
+      if(parts.some((w)=>w!==parts[0]&&compactNumericToken(w.text)===''&&!/^[,.;:]$/.test(cleanText(w.text))))return;
       const box=unionBoxes(parts);if(!box)return;
-      const confidence=parts.reduce((s,w)=>s+(Number(w.confidence)||0),0)/parts.length;
+      if(box.width>Math.max(155,medianWordHeight*10.8))return;
+      const confidence=parts.reduce((sum,w)=>sum+(Number(w.confidence)||0),0)/parts.length;
       const scale=box.height/Math.max(1,medianWordHeight);
       found.push({price:Number(price.toFixed(2)),box,words:[...parts],lineIndex:-1,confidence,explicitCurrency:true,text:cleanText(parts.map((w)=>w.text).join(' ')),pass,pattern,scale});
     };
@@ -298,33 +313,37 @@
       const near=list.filter((w)=>{
         if(w===anchor)return false;
         const wc=center(w);
-        if(w.x1<anchor.x0-8||w.x0>anchor.x1+maxX)return false;
+        if(w.x1<anchor.x0-5||w.x0>anchor.x1+maxX)return false;
         if(Math.abs(wc.y-ac.y)>maxY)return false;
+        if(compactNumericToken(w.text)===''&&!/^[,.;:]$/.test(cleanText(w.text)))return false;
         return true;
       }).sort((a,b)=>a.x0-b.x0||a.y0-b.y0);
 
-      // Primeiro tenta combinações textuais curtas. Isso cobre vírgula/ponto reconhecidos normalmente
-      // e também o caso em que Tesseract separa R e $ em palavras distintas.
-      const ordered=near.filter((w)=>w.x0>=anchor.x0-5).slice(0,8);
-      for(let start=0;start<Math.min(3,ordered.length);start+=1){
-        for(let len=1;len<=4&&start+len<=ordered.length;len+=1){
+      const ordered=near.filter((w)=>w.x0>=anchor.x0-4).slice(0,6);
+      for(let start=0;start<Math.min(2,ordered.length);start+=1){
+        for(let len=1;len<=3&&start+len<=ordered.length;len+=1){
           const parts=[anchor,...ordered.slice(start,start+len)];
+          const box=unionBoxes(parts);
+          if(!box||box.width>Math.max(155,medianWordHeight*10.8))continue;
           const parsed=parseOcrMoney(parts.map((w)=>w.text).join(' '));
           if(parsed?.price)push(parsed.price,parts,`spatial-${parsed.pattern}`);
         }
       }
 
-      // Reais + centavos em fontes/baselines diferentes: "R$ 1" e "95".
+      // Reais + centavos separados precisam formar um único bloco tipográfico compacto.
       const majors=near.filter((w)=>/^\d{1,4}$/.test(compactNumericToken(w.text)));
       majors.forEach((major)=>{
         const majorDigits=compactNumericToken(major.text);
-        if(!majorDigits||major.x0<anchor.x0-8||major.x0-anchor.x1>Math.max(145,medianWordHeight*8.5))return;
+        if(!majorDigits||major.x0<anchor.x0-5||major.x0-anchor.x1>Math.max(62,medianWordHeight*4.2))return;
         const mc=center(major);
         const cents=near
           .filter((w)=>w!==major&&/^\d{2}$/.test(compactNumericToken(w.text)))
           .filter((w)=>{
             const wc=center(w),gap=w.x0-major.x1;
-            return gap>=-10&&gap<=Math.max(92,major.height*3.4)&&Math.abs(wc.y-mc.y)<=Math.max(58,major.height*1.65);
+            const heightRatio=w.height/Math.max(1,major.height);
+            return gap>=-5&&gap<=Math.max(46,major.height*2.15)
+              &&Math.abs(wc.y-mc.y)<=Math.max(38,major.height*1.15)
+              &&heightRatio>=.32&&heightRatio<=1.45;
           })
           .sort((a,b)=>Math.abs(a.x0-major.x1)-Math.abs(b.x0-major.x1)||Math.abs(center(a).y-mc.y)-Math.abs(center(b).y-mc.y));
         if(cents.length){
@@ -335,13 +354,12 @@
       });
     });
 
-    // Deduplica a mesma leitura espacial dentro da passagem.
     const dedup=[];
     found.sort((a,b)=>b.confidence-a.confidence||b.scale-a.scale||a.box.width-b.box.width).forEach((p)=>{
       const pc=center(p.box);
       const duplicate=dedup.some((x)=>{
         const xc=center(x.box);
-        return Math.abs(x.price-p.price)<.011&&Math.abs(xc.x-pc.x)<72&&Math.abs(xc.y-pc.y)<54;
+        return Math.abs(x.price-p.price)<.011&&Math.abs(xc.x-pc.x)<56&&Math.abs(xc.y-pc.y)<42;
       });
       if(!duplicate)dedup.push(p);
     });
@@ -371,27 +389,50 @@
       const pc=center(p.box);
       let group=groups.find((g)=>{
         const gc=center(g.box);
-        return Math.abs(g.price-p.price)<.011&&Math.abs(gc.x-pc.x)<72&&Math.abs(gc.y-pc.y)<52;
+        return Math.abs(g.price-p.price)<.011&&Math.abs(gc.x-pc.x)<58&&Math.abs(gc.y-pc.y)<44;
       });
       if(!group){
         group={...p,passNames:new Set([p.pass]),passCount:1,observations:[p],conflicts:[]};groups.push(group);return;
       }
       group.passNames.add(p.pass);group.passCount=group.passNames.size;group.observations.push(p);
-      if(p.confidence>group.confidence){group.confidence=p.confidence;group.box=p.box;group.words=p.words;group.explicitCurrency=group.explicitCurrency||p.explicitCurrency;group.text=p.text;group.scale=Math.max(group.scale,p.scale);}
+      if(p.confidence>group.confidence){group.confidence=p.confidence;group.box=p.box;group.words=p.words;group.explicitCurrency=group.explicitCurrency||p.explicitCurrency;group.text=p.text;group.scale=Math.max(group.scale,p.scale);group.pattern=p.pattern||group.pattern;}
       else{group.explicitCurrency=group.explicitCurrency||p.explicitCurrency;group.scale=Math.max(group.scale,p.scale);}
     });
 
-    // Marca leituras diferentes na mesma posição. Não são descartadas automaticamente porque
-    // podem representar dois preços reais; porém jamais serão publicadas sem coerência de bloco.
+    const regions=[];
     groups.forEach((g)=>{
       const gc=center(g.box);
-      g.conflicts=groups.filter((x)=>x!==g&&Math.abs(center(x.box).x-gc.x)<62&&Math.abs(center(x.box).y-gc.y)<46&&Math.abs(x.price-g.price)>.011).map((x)=>x.price);
+      let region=regions.find((r)=>Math.abs(r.cx-gc.x)<54&&Math.abs(r.cy-gc.y)<40);
+      if(!region){region={cx:gc.x,cy:gc.y,groups:[]};regions.push(region);}
+      region.groups.push(g);
+      region.cx=region.groups.reduce((sum,x)=>sum+center(x.box).x,0)/region.groups.length;
+      region.cy=region.groups.reduce((sum,x)=>sum+center(x.box).y,0)/region.groups.length;
     });
-    return groups;
+
+    const resolved=[];
+    regions.forEach((region)=>{
+      if(region.groups.length===1){resolved.push(region.groups[0]);return;}
+      const score=(x)=>Number(x.passCount||1)*110+(x.explicitCurrency?28:0)+Number(x.confidence||0)+Math.min(2.4,Number(x.scale||0))*12;
+      const ranked=[...region.groups].sort((a,b)=>score(b)-score(a));
+      const best=ranked[0],second=ranked[1];
+      const dominant=Number(best.passCount||1)>=2&&score(best)-score(second)>=58;
+      if(dominant){
+        best.conflicts=[];
+        best.resolvedConflicts=ranked.slice(1).map((x)=>x.price);
+        resolved.push(best);
+      }else{
+        ranked.forEach((g)=>{
+          const gc=center(g.box);
+          g.conflicts=ranked.filter((x)=>x!==g&&Math.abs(center(x.box).x-gc.x)<58&&Math.abs(center(x.box).y-gc.y)<44&&Math.abs(x.price-g.price)>.011).map((x)=>x.price);
+          resolved.push(g);
+        });
+      }
+    });
+    return resolved;
   }
 
   const CATEGORY_HEADING_RE=/^(?:ACOUGUE(?:\s+COMPLETO)?|AÇOUGUE(?:\s+COMPLETO)?|PADARIA|PERECIVEIS(?:\s+E\s+SALSICHARIA)?|PERECÍVEIS(?:\s+E\s+SALSICHARIA)?|SALSICHARIA|HORTIFRUTI|HORTI\s*FRUTI|BEBIDAS|MERCEARIA|LIMPEZA|HIGIENE|BAZAR|FRIOS|CONGELADOS)$/i;
-  const INSTITUTIONAL_RE=/(?:PRECO\s+BAIXO|PREÇO\s+BAIXO|FEIRA\s+GIGANTE|QUEM\s+QUISER|PODE\s+ECONOMIZAR|TODA\s+A\s+LOJA|SEM\s+JUROS|CARTAO|CARTÃO|CREDIFFATO|CREDIFATO|PECA\s+JA|PEÇA\s+JÁ|CLUBE\s+MAX|BAIXE\s+O\s+APP|APROVEITE\s+DESCONTOS|ACESSE\s+(?:O|AO)|FACA\s+(?:UM\s+)?CADASTRO|FAÇA\s+(?:UM\s+)?CADASTRO|INFORME\s+SEU\s+CPF|PRECOS?\s+VALIDOS?|PREÇOS?\s+VÁLIDOS?|ENQUANTO\s+DURAREM|MODALIDADE\s+ATACADO|PRODUTOS\s+DA\s+MESMA|CONSULTE\s+DISPONIBILIDADE|OPORTUNIDADES|CANDIDATE[- ]?SE|INCLUSAO|INCLUSÃO|TELEVENDAS|VALE[- ]?GAS|VALE[- ]?GÁS|WHATSAPP|SAO\s+JOSE\s+DO\s+RIO\s+PRETO|SÃO\s+JOSÉ\s+DO\s+RIO\s+PRETO|VOTUPORANGA|FERNANDOPOLIS|FERNANDÓPOLIS|CATANDUVA|TEMOS\s+OPORTUNIDADES|NAO\s+JOGUE|NÃO\s+JOGUE|PAPEL\s+NO\s+CHAO|PAPEL\s+NO\s+CHÃO|ECONOMIA\s+NO\s+SEU\s+BOLSO|FARTURA\s+NO\s+CHURRASCO|CONDICOES|CONDIÇÕES|PARCELA|PARCELE|PARCELE\s+MINIMA|PARCELA\s+MINIMA|LOJES\s+COM|\bBAZAR\b|\bPARC[A-ZÀ-Ü]{0,7}\b|ACADO\s+SAO\s+VALID|ACADO\s+SÃO\s+VÁLID|SOMONTE\s+PARA|SOMENTE\s+PARA\s+PROD|CRED[ÍI]FIATO|CONDL[A-ZÀ-Ü]*)/i;
+  const INSTITUTIONAL_RE=/(?:PRECO\s+BAIXO|PREÇO\s+BAIXO|FEIRA\s+GIGANTE|QUEM\s+QUISER|PODE\s+ECONOMIZAR|TODA\s+A\s+LOJA|SEM\s+JUROS|CARTAO|CARTÃO|CREDIFFATO|CREDIFATO|PECA\s+JA|PEÇA\s+JÁ|CLUBE\s+MAX|BAIXE\s+O\s+APP|APROVEITE\s+DESCONTOS|ACESSE\s+(?:O|AO)|FACA\s+(?:UM\s+)?CADASTRO|FAÇA\s+(?:UM\s+)?CADASTRO|INFORME\s+SEU\s+CPF|PRECOS?\s+VALIDOS?|PREÇOS?\s+VÁLIDOS?|ENQUANTO\s+DURAREM|MODALIDADE\s+ATACADO|PRODUTOS\s+DA\s+MESMA|CONSULTE\s+DISPONIBILIDADE|CONSULTAR\s+DISP(?:ONIBILIDADE)?|O?FERTAS?\s+V[AÁ]LIDAS?|OPORTUNIDADES|CANDIDATE[- ]?SE|INCLUSAO|INCLUSÃO|TELEVENDAS|VALE[- ]?GAS|VALE[- ]?GÁS|WHATSAPP|SAO\s+JOSE\s+DO\s+RIO\s+PRETO|SÃO\s+JOSÉ\s+DO\s+RIO\s+PRETO|VOTUPORANGA|FERNANDOPOLIS|FERNANDÓPOLIS|CATANDUVA|TEMOS\s+OPORTUNIDADES|NAO\s+JOGUE|NÃO\s+JOGUE|PAPEL\s+NO\s+CHAO|PAPEL\s+NO\s+CHÃO|ECONOMIA\s+NO\s+SEU\s+BOLSO|FARTURA\s+NO\s+CHURRASCO|CONDICOES|CONDIÇÕES|PARCELA|PARCELE|PARCELE\s+MINIMA|PARCELA\s+MINIMA|LOJES\s+COM|\bBAZAR\b|\bPARC[A-ZÀ-Ü]{0,7}\b|ACADO\s+SAO\s+VALID|ACADO\s+SÃO\s+VÁLID|SOMONTE\s+PARA|SOMENTE\s+PARA\s+PROD|CRED[ÍI]FIATO|CONDL[A-ZÀ-Ü]*)/i;
 
   function isInstitutionalText(text) {
     const t=cleanText(text);
@@ -410,6 +451,7 @@
     if(isInstitutionalText(line.text))return true;
     if(/^(?:KG|G|GR|ML|L|LT|LTS|UN|UND|UNIDADE|UNIDADES|CADA|PACOTE|PCT|BANDEJA|BDJ|CAIXA|CX)$/.test(t))return true;
     if(/^\d{1,2}[/.]\d{1,2}[/.]\d{2,4}/.test(t))return true;
+    if(extractPackage(line?.text||''))return false;
     const letters=(t.match(/[A-Z]/g)||[]).length,digits=(t.match(/\d/g)||[]).length;
     if(letters<2&&digits>letters*2)return true;
     return false;
@@ -450,7 +492,14 @@
   const PRODUCT_CUE_RE=/\b(?:ABACATE|ABACAXI|ABOBORA|ABÓBORA|ABOBRINHA|ACELGA|ALHO|ALMEIRAO|ALMEIRÃO|ALFACE|BANANA|BATATA|BERINJELA|BETERRABA|BROCOLIS|BRÓCOLIS|CEBOLA|CENOURA|CHUCHU|COUVE|LARANJA|LIMAO|LIMÃO|MACA|MAÇÃ|MAMAO|MAMÃO|MANDIOCA|MANGA|MELANCIA|MELAO|MELÃO|MORANGO|MOURGOT|OVOS?|PEPINO|PERA|PIMENTAO|PIMENTÃO|REPOLHO|TANGERINA|TOMATE|UVA|VAGEM|FRANGO|BOVIN|SUIN|SUÍN|CARNE|COSTELA|PALETA|FILE|FILÉ|COXA|SOBRECOXA|PEITO|PERNIL|PANCETA|LINGUICA|LINGUIÇA|PRESUNTO|QUEIJO|MUSSARELA|MARGARINA|MANTEIGA|REQUEIJAO|REQUEIJÃO|IOGURTE|BEBIDA|LEITE|PAO|PÃO|BOLO|BROA|ROSCA|TORTA|SONHO|SALGADINHO|CAROLINA|EMPANADO|NUGGET|STEAK|SALSICHA|RAVIOLI|ARROZ|FEIJAO|FEIJÃO|CAFE|CAFÉ|ACUCAR|AÇÚCAR|OLEO|ÓLEO|MASSA|MACARR|BISCO|CHOC|REFRIG|CERVEJA|AGUA|ÁGUA|SABAO|SABÃO|DETERG|AMAC|PAPEL|SHAMPOO|SABONETE|FRALDA|DESOD|CARVAO|CARVÃO|AZEITE|FARINHA|MOLHO|MAIONESE|ATUM|MILHO)\b/i;
 
   function polishProductText(text) {
-    let clean=sanitizeProductText(text);
+    let clean=sanitizeProductText(text)
+      // Corrige unidades que o OCR costuma confundir somente em contexto inequívoco de embalagem.
+      .replace(/\b(PACOTE|PCT|BANDEJA|BDJ|POTE|LATA|GARRAFA)\s*(\d{2,4})9\b/gi,'$1 $2g')
+      .replace(/\b(PACOTE|PCT|BANDEJA|BDJ|POTE)\s+(\d{1,2})K[O0]\b/gi,'$1 $2Kg')
+      // Condição promocional pertence ao card, mas não ao nome comercial do produto.
+      .replace(/\bA\s+PARTIR\s+DE\s+\d+\s+UNIDADES?.*$/i,'')
+      .replace(/\bAPARTRDE\s+\d+\s+UNIDADES?.*$/i,'')
+      .trim();
     let tokens=clean.split(/\s+/).filter(Boolean);
     const cueIndex=tokens.findIndex((token)=>PRODUCT_CUE_RE.test(token));
     if(cueIndex>0){
@@ -519,6 +568,7 @@
     if(cue)score+=.30;
     if(pack)score+=.18;
     if(/\b(?:KG|G|GR|ML|L|LT|LTS|UN|UND|PACOTE|PCT|BANDEJA|BDJ|POTE|LATA|PET|GARRAFA|PECA|PEÇA)\b/i.test(clean))score+=.06;
+    if(/\b(?:PACOTE|PCT|BANDEJA|BDJ|POTE|LATA|GARRAFA)\s*$/i.test(clean))score-=.28;
     if(/^(?:FATIAD[OA]|TRADICIONAL|SABORES?|PACOTE|BANDEJA|CONGELAD[OA]|RESFRIAD[OA]|SEM|COM|LIGHT|ZERO|TIPOS?)\b/.test(folded)&&!cue)score-=.30;
     if(!cue&&!pack&&tokens.length<=3)score-=.24;
     if(/[»«]{1,}|['"`´]{2,}/.test(clean))score-=.12;
@@ -557,9 +607,10 @@
     const candidates=(fragments||[]).filter((fragment)=>!selectedSet.has(fragment)).map((fragment)=>{
       const ownership=ownershipForFragment(price,fragment,prices,pageWidth);
       const semantic=productSemanticScore(fragment.text,fragment.confidence);
-      return {fragment,ownership,semantic};
+      const packageOnly=Boolean(extractPackage(fragment.text));
+      return {fragment,ownership,semantic,packageOnly};
     }).filter((x)=>{
-      if(x.semantic<.20||isInstitutionalText(x.fragment.text))return false;
+      if((x.semantic<.20&&!x.packageOnly)||isInstitutionalText(x.fragment.text))return false;
       const box=x.fragment.box,fc=center(box);
       const horizontal=overlap1d(box.x0,box.x1,baseBox.x0-corridorPad,baseBox.x1+corridorPad);
       const centerDiff=Math.abs(fc.x-center(baseBox).x);
@@ -596,7 +647,13 @@
       const improvement=completeness-(best.completeness||0);
       const score=completeness*120+semantic*100+spatial*45+ownershipConfidence*35+ocrConfidence*.12+Math.min(words,11)*2;
       const bestScore=(best.completeness||0)*120+Number(best.semantic||0)*100+Number(best.spatial||0)*45+Number(best.ownershipConfidence||0)*35+Number(best.ocrConfidence||0)*.12+Math.min((best.productName||'').split(/\s+/).length,11)*2;
-      if(semantic>=Math.max(.48,Number(best.semantic||0)-.055)&&completeness>=.55&&(improvement>=.045||score>bestScore+7)){
+      const additions=ordered.filter((x)=>!selectedSet.has(x.fragment));
+      const structuralAddition=additions.some((x)=>x.packageOnly||PRODUCT_CUE_RE.test(x.fragment.text));
+      const directAddition=additions.some((x)=>{
+        const b=x.fragment.box;
+        return Math.min(Math.abs(baseBox.y0-b.y1),Math.abs(b.y0-baseBox.y1))<=38;
+      });
+      if(semantic>=Math.max(.48,Number(best.semantic||0)-.055)&&completeness>=.55&&(improvement>=.025||score>bestScore+3||(structuralAddition&&directAddition&&completeness>=Number(best.completeness||0)-.01&&score>=bestScore-2))){
         best={...best,productName:text,productBox:box,ocrConfidence,semantic,ownershipConfidence,spatial,selectedFragments:ordered,completeness};
       }
     };
@@ -612,6 +669,72 @@
       }
     }
     return best;
+  }
+
+  // Fecha a descrição pelo corredor exclusivo do card depois da escolha principal.
+  // Diferente da expansão por score, esta etapa recupera cabeçalho e embalagem contíguos
+  // (ex.: "Queijo" + "Mussarela ..." + "160g") sem atravessar para o card vizinho.
+  function completeOwnedProductDescription(product,price,fragments,prices,pageWidth) {
+    if(!product?.selectedFragments?.length)return product;
+    const baseItems=[...product.selectedFragments];
+    const baseBox=unionBoxes(baseItems.map((x)=>x.fragment.box));
+    if(!baseBox)return product;
+    const connector=/^(?:OU|COM|SEM|DE|DA|DO|DAS|DOS|E)$/i;
+    const pad=Math.max(34,Math.min(62,pageWidth*.034));
+    const candidates=(fragments||[]).map((fragment)=>{
+      const ownership=ownershipForFragment(price,fragment,prices,pageWidth);
+      const semantic=productSemanticScore(fragment.text,fragment.confidence);
+      const pack=Boolean(extractPackage(fragment.text));
+      const connect=connector.test(fold(fragment.text));
+      return {fragment,ownership,semantic,packageOnly:pack,connectorOnly:connect};
+    }).filter((x)=>{
+      if(!x.ownership.accepted||isInstitutionalText(x.fragment.text))return false;
+      if(x.semantic<.20&&!x.packageOnly&&!x.connectorOnly)return false;
+      const box=x.fragment.box,fc=center(box),bc=center(baseBox);
+      const horizontal=overlap1d(box.x0,box.x1,baseBox.x0-pad,baseBox.x1+pad);
+      if(horizontal<=0&&Math.abs(fc.x-bc.x)>Math.max(68,pageWidth*.04))return false;
+      if(box.y1<baseBox.y0-58||box.y0>price.box.y0+12)return false;
+      return true;
+    }).sort((a,b)=>a.fragment.box.y0-b.fragment.box.y0||a.fragment.box.x0-b.fragment.box.x0);
+
+    if(!candidates.length)return product;
+    const selected=[];
+    // Começa pelos itens já escolhidos e adiciona vizinhos contíguos acima/abaixo.
+    const originalSet=new Set(baseItems.map((x)=>x.fragment));
+    candidates.forEach((x)=>{if(originalSet.has(x.fragment))selected.push(x);});
+    let changed=true;
+    while(changed){
+      changed=false;
+      const currentBox=unionBoxes(selected.map((x)=>x.fragment.box))||baseBox;
+      for(const x of candidates){
+        if(selected.includes(x))continue;
+        const b=x.fragment.box;
+        const gapAbove=currentBox.y0-b.y1;
+        const gapBelow=b.y0-currentBox.y1;
+        const verticalNear=(gapAbove>=-8&&gapAbove<=42)||(gapBelow>=-8&&gapBelow<=38)||(b.y0<=currentBox.y1&&b.y1>=currentBox.y0);
+        if(!verticalNear)continue;
+        selected.push(x);changed=true;
+      }
+    }
+    if(!selected.length)return product;
+    selected.sort((a,b)=>a.fragment.box.y0-b.fragment.box.y0||a.fragment.box.x0-b.fragment.box.x0);
+    const text=polishProductText(selected.map((x)=>x.fragment.text).join(' '));
+    if(!text||isInstitutionalText(text))return product;
+    const words=text.split(/\s+/).filter(Boolean);
+    if(words.length>17)return product;
+    const ocrConfidence=selected.reduce((sum,x)=>sum+Number(x.fragment.confidence||0),0)/selected.length;
+    const semantic=productSemanticScore(text,ocrConfidence);
+    const completeness=descriptionCompletenessScore(text);
+    const oldWords=(product.productName||'').split(/\s+/).filter(Boolean).length;
+    const usefulGain=words.length>oldWords||Boolean(extractPackage(text)&&!extractPackage(product.productName));
+    if(!usefulGain||semantic<Math.max(.48,Number(product.semantic||0)-.06)||completeness<Math.max(.52,Number(product.completeness||0)-.04))return product;
+    const productBox=unionBoxes(selected.map((x)=>x.fragment.box));
+    const ownershipConfidence=selected.reduce((sum,x)=>sum+Number(x.ownership.confidence||0),0)/selected.length;
+    const pc=center(price.box);
+    const horizontal=rangeDistance(pc.x,productBox.x0-10,productBox.x1+10);
+    const vertical=productBox.y1<=price.box.y0?price.box.y0-productBox.y1:Math.abs(center(productBox).y-pc.y)*1.1;
+    const spatial=clamp(1-horizontal/Math.max(140,pageWidth*.10)-vertical/Math.max(260,pageWidth*.19)*.62,0,1);
+    return {...product,productName:text,productBox,ocrConfidence,semantic,ownershipConfidence,spatial,selectedFragments:selected,completeness};
   }
 
   // Escolhe a melhor descrição entre as leituras independentes (página inteira, densa,
@@ -660,7 +783,54 @@
     return {...best,descriptionConflict:conflict,descriptionFidelity:fidelity,descriptionVariantCount:unique.length};
   }
 
-  function buildTextFragments(words, prices) {
+  function pricesShareCard(a,b) {
+    if(!a||!b||!a.box||!b.box)return false;
+    const A=center(a.box),B=center(b.box);
+    const h=Math.max(Number(a.box.height||0),Number(b.box.height||0),18);
+    return Math.abs(A.x-B.x)<=Math.max(52,h*1.8)&&Math.abs(A.y-B.y)<=Math.max(38,h*1.6);
+  }
+
+  function horizontalPriceCell(price,prices,pageWidth=1200) {
+    const pc=center(price.box);
+    const rowTol=Math.max(72,Number(price.box?.height||0)*3.0);
+    const peers=(prices||[]).filter((p)=>p!==price&&!pricesShareCard(p,price)&&Math.abs(center(p.box).y-pc.y)<=rowTol);
+    const left=peers.filter((p)=>center(p.box).x<pc.x).sort((a,b)=>center(b.box).x-center(a.box).x)[0];
+    const right=peers.filter((p)=>center(p.box).x>pc.x).sort((a,b)=>center(a.box).x-center(b.box).x)[0];
+    const l=left?(center(left.box).x+pc.x)/2:Math.max(0,pc.x-Math.max(115,pageWidth*.09));
+    const r=right?(center(right.box).x+pc.x)/2:Math.min(pageWidth,pc.x+Math.max(115,pageWidth*.09));
+    return {left:l,right:r};
+  }
+
+  function boxInsideHorizontalCell(box,price,prices,pageWidth=1200) {
+    const cell=horizontalPriceCell(price,prices,pageWidth);
+    const inside=Math.max(0,Math.min(box.x1,cell.right)-Math.max(box.x0,cell.left));
+    const ratio=inside/Math.max(1,box.width);
+    const cx=center(box).x;
+    return {accepted:cx>=cell.left-4&&cx<=cell.right+4&&ratio>=.62,ratio,cell};
+  }
+
+  function nearestPriceOwnerForBox(box,prices,pageWidth=1200) {
+    if(!box||(prices||[]).length===0)return {price:null,confidence:0,best:Infinity,second:Infinity};
+    const fc=center(box);
+    const scored=(prices||[]).map((price)=>{
+      const pc=center(price.box);
+      const above=price.box.y0-box.y1;
+      const below=box.y0-price.box.y1;
+      if(above>Math.max(300,pageWidth*.20)||below>Math.max(88,pageWidth*.055))return {price,cost:99999};
+      const horizontal=rangeDistance(pc.x,box.x0-10,box.x1+10);
+      const vertical=above>=0?above*.58:(below>=0?below*1.9:Math.abs(fc.y-pc.y)*.42);
+      const centerDx=Math.abs(fc.x-pc.x);
+      return {price,cost:horizontal*1.55+vertical+centerDx*.075};
+    }).filter((x)=>x.cost<99999).sort((a,b)=>a.cost-b.cost);
+    if(!scored.length)return {price:null,confidence:0,best:Infinity,second:Infinity};
+    const best=scored[0],second=scored[1];
+    if(!second)return {price:best.price,confidence:1,best:best.cost,second:Infinity};
+    const margin=second.cost-best.cost;
+    const confidence=clamp(.45+margin/Math.max(55,second.cost)*.72,0,1);
+    return {price:best.price,confidence,best:best.cost,second:second.cost,margin};
+  }
+
+  function buildTextFragments(words, prices, pageWidth=1200) {
     const lines=segmentRows(words);
     const priceBoxes=(prices||[]).map((p)=>p.box).filter(Boolean);
     const heights=words.map((w)=>w.height);const medianH=median(heights)||16;
@@ -668,18 +838,25 @@
     lines.forEach((line)=>{
       const kept=(line.words||[]).filter((word)=>{
         if(/^(?:R\$|R|\$|RS)$/i.test(cleanText(word.text)))return false;
-        return !priceBoxes.some((pb)=>intersectionRatio(word,pb)>=.40);
+        return !priceBoxes.some((pb)=>intersectionRatio(word,pb)>=.34);
       }).sort((a,b)=>a.x0-b.x0);
-      let seg=[];
+      let seg=[],segOwner=null;
       const flush=()=>{
         if(!seg.length)return;
         const box=unionBoxes(seg),text=sanitizeProductText(seg.map((w)=>w.text).join(' '));
-        const confidence=seg.reduce((s,w)=>s+(Number(w.confidence)||0),0)/seg.length;
-        if(text&&!isNoiseLine({text,box}))fragments.push({text,words:[...seg],box,confidence,cy:(box.y0+box.y1)/2});
-        seg=[];
+        const confidence=seg.reduce((sum,w)=>sum+(Number(w.confidence)||0),0)/seg.length;
+        const owner=nearestPriceOwnerForBox(box,prices,pageWidth);
+        if(text&&!isNoiseLine({text,box}))fragments.push({text,words:[...seg],box,confidence,cy:(box.y0+box.y1)/2,ownerPrice:owner.price,ownerConfidence:owner.confidence});
+        seg=[];segOwner=null;
       };
       kept.forEach((word)=>{
-        if(seg.length){const prev=seg[seg.length-1],gap=word.x0-prev.x1,scale=Math.max(prev.height,word.height,medianH,8);if(gap>Math.max(22,Math.min(46,scale*1.55)))flush();}
+        const wordOwner=nearestPriceOwnerForBox(word,prices,pageWidth);
+        if(seg.length){
+          const prev=seg[seg.length-1],gap=word.x0-prev.x1,scale=Math.max(prev.height,word.height,medianH,8);
+          const ownerChanged=segOwner?.price&&wordOwner?.price&&segOwner.price!==wordOwner.price&&!pricesShareCard(segOwner.price,wordOwner.price)&&Math.max(segOwner.confidence,wordOwner.confidence)>=.54;
+          if(gap>Math.max(20,Math.min(40,scale*1.42))||ownerChanged)flush();
+        }
+        if(!seg.length)segOwner=wordOwner;
         seg.push(word);
       });
       flush();
@@ -704,12 +881,18 @@
 
   function ownershipForFragment(price,fragment,prices,pageWidth) {
     const own=priceFragmentCost(price,fragment,pageWidth);
-    let other=Infinity;
-    (prices||[]).forEach((candidate)=>{if(candidate===price)return;other=Math.min(other,priceFragmentCost(candidate,fragment,pageWidth));});
-    if(!Number.isFinite(other))return {accepted:own<99999,confidence:1,own,other};
-    const margin=other-own;
-    const confidence=clamp(.5+margin/Math.max(90,other)*.5,0,1);
-    return {accepted:own<99999&&(own<=other+8||margin>=-8),confidence,own,other};
+    const scored=(prices||[]).map((candidate)=>({candidate,cost:priceFragmentCost(candidate,fragment,pageWidth)})).filter((x)=>x.cost<99999).sort((a,b)=>a.cost-b.cost);
+    if(!scored.length)return {accepted:false,confidence:0,own,other:Infinity};
+    const best=scored[0],second=scored[1];
+    const shares=fragment.ownerPrice&&pricesShareCard(fragment.ownerPrice,price);
+    const explicitOwnerOk=!fragment.ownerPrice||fragment.ownerPrice===price||shares||Number(fragment.ownerConfidence||0)<.48;
+    const isBest=best.candidate===price||pricesShareCard(best.candidate,price);
+    const cellCheck=boxInsideHorizontalCell(fragment.box,price,prices,pageWidth);
+    const other=second?.cost??Infinity;
+    const margin=Number.isFinite(other)?other-own:Infinity;
+    const confidence=!Number.isFinite(other)?1:clamp(.46+margin/Math.max(50,other)*.72,0,1);
+    const ambiguous=Number.isFinite(other)&&margin<Math.max(5,Math.min(18,own*.10));
+    return {accepted:own<99999&&isBest&&explicitOwnerOk&&cellCheck.accepted&&!ambiguous,confidence:confidence*cellCheck.ratio,own,other,cell:cellCheck.cell};
   }
 
   function productForPrice(price, fragments, prices, pageWidth) {
@@ -831,7 +1014,7 @@
     else if(validity?.startAt&&validity?.endAt&&validity.inferred){score+=.01;evidence.push('validade inferida pelo nome do arquivo');risks.push('ocr_validity_inferred');}
     else risks.push('missing_validity');
 
-    const hard=new Set(['association_disagreement','missing_validity','ocr_low_price_confidence','ocr_price_conflict','ocr_price_scale_suspicious','ocr_low_description_quality','ocr_incomplete_description','ocr_description_conflict']);
+    const hard=new Set(['association_disagreement','missing_validity','ocr_low_price_confidence','ocr_price_conflict','ocr_price_scale_suspicious','ocr_low_description_quality','ocr_incomplete_description','ocr_description_conflict','ocr_validity_inferred']);
     if(risks.some((r)=>hard.has(r)))score=Math.min(score,.91);
     const confidence=clamp(score,.42,.995);
     const agreementOk=Number(product.descriptionVariantCount||0)<2||Number(product.descriptionAgreement||0)>=.46;
@@ -850,16 +1033,16 @@
     const inferCategory=window.MercadorIA?.inferCategory;
     const passContexts=(pageData.passLines||[]).map((entry)=>{
       const prices=collectPassPrices(entry);
-      return {entry,prices,fragments:buildTextFragments(entry.words||[],prices)};
+      return {entry,prices,fragments:buildTextFragments(entry.words||[],prices,pageData.canvasWidth)};
     });
     const prices=mergePricePasses(passContexts.map((ctx)=>ctx.prices));
-    const fragments=buildTextFragments(pageData.words,prices);
+    const fragments=buildTextFragments(pageData.words,prices,pageData.canvasWidth);
     const raw=[];
 
     prices.forEach((price,index)=>{
       const variants=[];
       let mergedProduct=productForPrice(price,fragments,prices,pageData.canvasWidth);
-      if(mergedProduct){mergedProduct=expandProductDescription(mergedProduct,price,fragments,prices,pageData.canvasWidth);variants.push({...mergedProduct,descriptionPass:'merged'});}
+      if(mergedProduct){mergedProduct=expandProductDescription(mergedProduct,price,fragments,prices,pageData.canvasWidth);mergedProduct=completeOwnedProductDescription(mergedProduct,price,fragments,prices,pageData.canvasWidth);variants.push({...mergedProduct,descriptionPass:'merged'});}
 
       // Reavalia a descrição em cada passagem que realmente enxergou este preço. Isso evita
       // que o merge global escolha apenas a última linha ("Fatiado Seara") quando uma leitura
@@ -878,7 +1061,7 @@
         }
         if(!localPrice)return;
         let local=productForPrice(localPrice,ctx.fragments,ctx.prices,pageData.canvasWidth);
-        if(local){local=expandProductDescription(local,localPrice,ctx.fragments,ctx.prices,pageData.canvasWidth);variants.push({...local,descriptionPass:observation.pass});}
+        if(local){local=expandProductDescription(local,localPrice,ctx.fragments,ctx.prices,pageData.canvasWidth);local=completeOwnedProductDescription(local,localPrice,ctx.fragments,ctx.prices,pageData.canvasWidth);variants.push({...local,descriptionPass:observation.pass});}
       });
 
       const product=chooseProductDescriptionVariant(variants);
@@ -903,6 +1086,8 @@
         descriptionAgreement:Number(product.descriptionAgreement ?? 1),
         descriptionVariantCount:Number(product.descriptionVariantCount || 1),
         descriptionPass:product.descriptionPass || 'merged',
+        knowledgeCardText:cleanText((product.selectedFragments||[]).map((x)=>x.fragment?.text||'').join(' ')),
+        knowledgeOwnerConfidence:Number(product.ownershipConfidence||0),
         // Mantidos também para compatibilidade com versões intermediárias.
         domainOwnership:product.ownershipConfidence,blockCoherence:Number(product.descriptionFidelity ?? product.semantic),
         structuralSafe:quality.structuralSafe,automationSafe:quality.automationSafe,
@@ -1056,7 +1241,7 @@
       validity:validity||null,
       documentText,
       pages:pages.map((page)=>({pageNumber:page.pageNumber,width:Number(page.pageWidth||0),height:Number(page.pageHeight||0),mode:page.knowledgeMode||'unknown',text:page.text||'',metrics:{words:page.words?.length||0,lines:page.lines?.length||0,pricesDetected:Number(page.priceCoverageCount||0),expectedPriceFloor:Number(page.expectedPriceFloor||0),coveragePasses:Number(page.coveragePasses||0)},words:(page.words||[]).map(serializableWord),lines:(page.lines||[]).map(serializableLine),prices:knowledgePriceFacts(page)})),
-      promotionFacts:(candidates||[]).map((c)=>({id:c.id,pageNumber:c.pageNumber,productName:c.productName,category:c.category||'outros',packageText:c.packageText||'',price:Number(c.price||0),previousPrice:Number(c.previousPrice||0)||null,priceKind:c.priceKind||'general',conditions:c.conditions||'',confidence:Number(c.confidence||0),riskFlags:[...(c.riskFlags||[])],evidence:[...(c.evidence||[])],bbox:c.sourceBox||null,knowledgeMode:c.knowledgeMode||c.extractionMode||''}))
+      promotionFacts:(candidates||[]).map((c)=>({id:c.id,pageNumber:c.pageNumber,productName:c.productName,category:c.category||'outros',packageText:c.packageText||'',price:Number(c.price||0),previousPrice:Number(c.previousPrice||0)||null,priceKind:c.priceKind||'general',conditions:c.conditions||'',confidence:Number(c.confidence||0),riskFlags:[...(c.riskFlags||[])],evidence:[...(c.evidence||[])],bbox:c.sourceBox||null,sourceCardText:c.knowledgeCardText||'',ownerConfidence:Number(c.knowledgeOwnerConfidence||c.ownershipConfidence||0),descriptionCompleteness:Number(c.descriptionCompleteness||0),descriptionAgreement:Number(c.descriptionAgreement||0),knowledgeMode:c.knowledgeMode||c.extractionMode||''}))
     };
   }
 
