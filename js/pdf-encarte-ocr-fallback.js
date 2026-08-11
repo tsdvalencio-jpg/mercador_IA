@@ -9,7 +9,7 @@
     return;
   }
 
-  const OCR_ENGINE_VERSION = '2.4.0-ocr';
+  const OCR_ENGINE_VERSION = '2.5.0-ocr';
   const TESSERACT_VERSION = '5.1.1';
   const PDFJS_VERSION = base.PDFJS_VERSION || '5.7.284';
   const PDFJS_BASE = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}`;
@@ -258,6 +258,106 @@
         return Math.abs(x.price-p.price)<.001&&Math.abs(xc.x-pc.x)<60&&Math.abs(xc.y-pc.y)<42;
       });
       if(!exists)dedup.push(p);
+    });
+    return dedup;
+  }
+
+  function compactNumericToken(value) {
+    const raw=normalizeNumericOcr(value).replace(/[^0-9]/g,'');
+    return /^\d{1,5}$/.test(raw)?raw:'';
+  }
+
+  function currencyAnchor(word) {
+    const t=fold(word?.text||'').replace(/\s+/g,'');
+    return t==='R$'||t==='RS'||t==='$'||t==='R';
+  }
+
+  // Muitos encartes desenham "R$", reais e centavos como objetos tipográficos separados.
+  // Tesseract pode colocar os centavos acima/abaixo da linha e o parser por linha perde o preço.
+  // Esta leitura usa geometria, não somente texto corrido, e por isso recupera preços como:
+  //   R$ 1 95   /   R$ 14 98   /   R$249   /   R$ 2,49
+  // sem transformar números soltos de embalagem em preço.
+  function priceCandidatesFromWords(words,{pass='layout',medianWordHeight=16}={}) {
+    const list=(words||[]).filter((w)=>w?.text&&w.width>0&&w.height>0);
+    const found=[];
+    const maxX=Math.max(180,medianWordHeight*13.5);
+    const maxY=Math.max(62,medianWordHeight*3.2);
+
+    const push=(price,parts,pattern)=>{
+      if(!Number.isFinite(price)||price<=0||price>=10000||!parts?.length)return;
+      const box=unionBoxes(parts);if(!box)return;
+      const confidence=parts.reduce((s,w)=>s+(Number(w.confidence)||0),0)/parts.length;
+      const scale=box.height/Math.max(1,medianWordHeight);
+      found.push({price:Number(price.toFixed(2)),box,words:[...parts],lineIndex:-1,confidence,explicitCurrency:true,text:cleanText(parts.map((w)=>w.text).join(' ')),pass,pattern,scale});
+    };
+
+    list.filter(currencyAnchor).forEach((anchor)=>{
+      const ac=center(anchor);
+      const near=list.filter((w)=>{
+        if(w===anchor)return false;
+        const wc=center(w);
+        if(w.x1<anchor.x0-8||w.x0>anchor.x1+maxX)return false;
+        if(Math.abs(wc.y-ac.y)>maxY)return false;
+        return true;
+      }).sort((a,b)=>a.x0-b.x0||a.y0-b.y0);
+
+      // Primeiro tenta combinações textuais curtas. Isso cobre vírgula/ponto reconhecidos normalmente
+      // e também o caso em que Tesseract separa R e $ em palavras distintas.
+      const ordered=near.filter((w)=>w.x0>=anchor.x0-5).slice(0,8);
+      for(let start=0;start<Math.min(3,ordered.length);start+=1){
+        for(let len=1;len<=4&&start+len<=ordered.length;len+=1){
+          const parts=[anchor,...ordered.slice(start,start+len)];
+          const parsed=parseOcrMoney(parts.map((w)=>w.text).join(' '));
+          if(parsed?.price)push(parsed.price,parts,`spatial-${parsed.pattern}`);
+        }
+      }
+
+      // Reais + centavos em fontes/baselines diferentes: "R$ 1" e "95".
+      const majors=near.filter((w)=>/^\d{1,4}$/.test(compactNumericToken(w.text)));
+      majors.forEach((major)=>{
+        const majorDigits=compactNumericToken(major.text);
+        if(!majorDigits||major.x0<anchor.x0-8||major.x0-anchor.x1>Math.max(145,medianWordHeight*8.5))return;
+        const mc=center(major);
+        const cents=near
+          .filter((w)=>w!==major&&/^\d{2}$/.test(compactNumericToken(w.text)))
+          .filter((w)=>{
+            const wc=center(w),gap=w.x0-major.x1;
+            return gap>=-10&&gap<=Math.max(92,major.height*3.4)&&Math.abs(wc.y-mc.y)<=Math.max(58,major.height*1.65);
+          })
+          .sort((a,b)=>Math.abs(a.x0-major.x1)-Math.abs(b.x0-major.x1)||Math.abs(center(a).y-mc.y)-Math.abs(center(b).y-mc.y));
+        if(cents.length){
+          const centsDigits=compactNumericToken(cents[0].text);
+          const value=Number(`${majorDigits}.${centsDigits}`);
+          if(value>=.25&&value<1000)push(value,[anchor,major,cents[0]],'spatial-major-cents');
+        }
+      });
+    });
+
+    // Deduplica a mesma leitura espacial dentro da passagem.
+    const dedup=[];
+    found.sort((a,b)=>b.confidence-a.confidence||b.scale-a.scale||a.box.width-b.box.width).forEach((p)=>{
+      const pc=center(p.box);
+      const duplicate=dedup.some((x)=>{
+        const xc=center(x.box);
+        return Math.abs(x.price-p.price)<.011&&Math.abs(xc.x-pc.x)<72&&Math.abs(xc.y-pc.y)<54;
+      });
+      if(!duplicate)dedup.push(p);
+    });
+    return dedup;
+  }
+
+  function collectPassPrices(entry) {
+    const linePrices=priceCandidatesFromLines(entry.lines,{pass:entry.pass,medianWordHeight:entry.medianWordHeight});
+    const wordPrices=priceCandidatesFromWords(entry.words||[],{pass:entry.pass,medianWordHeight:entry.medianWordHeight});
+    const all=[...linePrices,...wordPrices];
+    const dedup=[];
+    all.sort((a,b)=>Number(b.explicitCurrency)-Number(a.explicitCurrency)||b.confidence-a.confidence||b.scale-a.scale).forEach((p)=>{
+      const pc=center(p.box);
+      const duplicate=dedup.some((x)=>{
+        const xc=center(x.box);
+        return Math.abs(x.price-p.price)<.011&&Math.abs(xc.x-pc.x)<68&&Math.abs(xc.y-pc.y)<50;
+      });
+      if(!duplicate)dedup.push(p);
     });
     return dedup;
   }
@@ -581,7 +681,7 @@
 
   function buildOcrCandidates(pageData,validity,options) {
     const inferCategory=window.MercadorIA?.inferCategory;
-    const passPrices=(pageData.passLines||[]).map((entry)=>priceCandidatesFromLines(entry.lines,{pass:entry.pass,medianWordHeight:entry.medianWordHeight}));
+    const passPrices=(pageData.passLines||[]).map((entry)=>collectPassPrices(entry));
     const prices=mergePricePasses(passPrices);
     const fragments=buildTextFragments(pageData.words,prices);
     const raw=[];
@@ -706,20 +806,48 @@
         progressBase=.61;progressWeight=.27;
         passes.push(await recognizePass(worker,saturation,{pass:'color',psm:'11'}));
 
-        let preliminary=mergePricePasses(passes.map((entry)=>priceCandidatesFromLines(entry.lines,{pass:entry.pass,medianWordHeight:entry.medianWordHeight})));
+        let preliminary=mergePricePasses(passes.map((entry)=>collectPassPrices(entry)));
 
-        // Se uma página visualmente rica ainda produziu poucos preços, entra o modo reforçado por faixas verticais.
+        // COBERTURA ADAPTATIVA DE ENCARTE VISUAL
+        // Um encarte denso pode ter 20-30 cards por página. OCR de página inteira frequentemente
+        // enxerga só os textos maiores. Em vez de aceitar essa subdetecção, fazemos uma segunda
+        // cobertura por regiões. Os recortes se sobrepõem e são consolidados por coordenadas,
+        // portanto aumentam recall sem publicar duplicatas.
         const mergedInitialWords=mergeOcrWords(passes.filter((p)=>p.pass!=='color').map((p)=>p.words));
-        const needsEnhanced=preliminary.length<7&&mergedInitialWords.length>=70;
-        if(needsEnhanced){
-          const strips=4,overlap=Math.round(strong.width*.025);
+        const usefulInitialWords=mergedInitialWords.filter((w)=>!isInstitutionalText(w.text));
+        const expectedFloor=Math.round(clamp(usefulInitialWords.length/9.5,10,28));
+        const richPage=mergedInitialWords.length>=55;
+        const needsVerticalCoverage=richPage&&(preliminary.length<18||preliminary.length<expectedFloor);
+        let coveragePasses=0;
+
+        if(needsVerticalCoverage){
+          const strips=5,overlap=Math.round(mild.width*.035);
           for(let i=0;i<strips;i+=1){
-            const x0=Math.max(0,Math.round(i*strong.width/strips)-overlap),x1=Math.min(strong.width,Math.round((i+1)*strong.width/strips)+overlap);
-            const crop=cropCanvas(strong,x0,0,x1,strong.height);
-            progressBase=.88+i*(.10/strips);progressWeight=.10/strips;
-            const pass=await recognizePass(worker,crop.canvas,{pass:`strip${i+1}`,psm:'6',offsetX:crop.offsetX,offsetY:crop.offsetY});
-            passes.push(pass);crop.canvas.width=crop.canvas.height=1;
+            const x0=Math.max(0,Math.round(i*mild.width/strips)-overlap),x1=Math.min(mild.width,Math.round((i+1)*mild.width/strips)+overlap);
+            const crop=cropCanvas(mild,x0,0,x1,mild.height);
+            progressBase=.88+i*(.065/strips);progressWeight=.065/strips;
+            const pass=await recognizePass(worker,crop.canvas,{pass:`vstrip${i+1}`,psm:'11',offsetX:crop.offsetX,offsetY:crop.offsetY});
+            passes.push(pass);coveragePasses+=1;crop.canvas.width=crop.canvas.height=1;
           }
+          preliminary=mergePricePasses(passes.map((entry)=>collectPassPrices(entry)));
+        }
+
+        // Se a varredura vertical ainda estiver abaixo da densidade textual esperada, fazemos
+        // faixas horizontais. Isso cobre layouts mistos (ex.: duas colunas grandes + grade de 3 colunas)
+        // sem assumir um modelo específico de supermercado.
+        const mergedAfterVertical=mergeOcrWords(passes.filter((p)=>p.pass!=='color').map((p)=>p.words));
+        const horizontalFloor=Math.max(16,Math.round(expectedFloor*.88));
+        const needsHorizontalCoverage=richPage&&preliminary.length<horizontalFloor&&mergedAfterVertical.length>=70;
+        if(needsHorizontalCoverage){
+          const bands=3,overlap=Math.round(strong.height*.028);
+          for(let i=0;i<bands;i+=1){
+            const y0=Math.max(0,Math.round(i*strong.height/bands)-overlap),y1=Math.min(strong.height,Math.round((i+1)*strong.height/bands)+overlap);
+            const crop=cropCanvas(strong,0,y0,strong.width,y1);
+            progressBase=.945+i*(.045/bands);progressWeight=.045/bands;
+            const pass=await recognizePass(worker,crop.canvas,{pass:`hband${i+1}`,psm:'11',offsetX:crop.offsetX,offsetY:crop.offsetY});
+            passes.push(pass);coveragePasses+=1;crop.canvas.width=crop.canvas.height=1;
+          }
+          preliminary=mergePricePasses(passes.map((entry)=>collectPassPrices(entry)));
         }
 
         const textPasses=passes.filter((p)=>p.pass!=='color');
@@ -728,14 +856,14 @@
         // Validade e condições usam apenas passagens textuais; a máscara cromática serve só ao preço.
         const pageText=cleanText([...new Set(textPasses.map((p)=>p.text).filter(Boolean))].join(' '));
         documentTexts.push(pageText);
-        pages.push({pageNumber,pageWidth:baseViewport.width,pageHeight:baseViewport.height,canvasWidth:mild.width,canvasHeight:mild.height,renderScale,words,lines,text:pageText,passLines:passes.map((p)=>({pass:p.pass,lines:p.lines,medianWordHeight:p.medianWordHeight}))});
+        pages.push({pageNumber,pageWidth:baseViewport.width,pageHeight:baseViewport.height,canvasWidth:mild.width,canvasHeight:mild.height,renderScale,words,lines,text:pageText,passLines:passes.map((p)=>({pass:p.pass,words:p.words,lines:p.lines,medianWordHeight:p.medianWordHeight})),priceCoverageCount:preliminary.length,expectedPriceFloor:expectedFloor,coveragePasses});
         source.width=source.height=1;mild.width=mild.height=1;strong.width=strong.height=1;saturation.width=saturation.height=1;
       }
 
       const documentText=documentTexts.join(' '),validity=enrichValidity(documentText,file.name);
       const candidates=pages.flatMap((page)=>buildOcrCandidates(page,validity,options));
       if(onProgress)onProgress({pageNumber:pdf.numPages,numPages:pdf.numPages,percent:100,mode:'ocr'});
-      return {validity,candidates,documentText,numPages:pdf.numPages,ocrPages:pages.map((p)=>({pageNumber:p.pageNumber,words:p.words.length,lines:p.lines.length,passes:p.passLines.length}))};
+      return {validity,candidates,documentText,numPages:pdf.numPages,ocrPages:pages.map((p)=>({pageNumber:p.pageNumber,words:p.words.length,lines:p.lines.length,passes:p.passLines.length,pricesDetected:p.priceCoverageCount,expectedFloor:p.expectedPriceFloor,coveragePasses:p.coveragePasses}))};
     }finally{await worker.terminate().catch(()=>{});}
   }
 
