@@ -10,8 +10,8 @@
     return;
   }
 
-  const OCR_ENGINE_VERSION = '3.1.0-knowledge-fidelity';
-  const KNOWLEDGE_SCHEMA_VERSION = 'mercador.encarte.knowledge.v2';
+  const OCR_ENGINE_VERSION = '3.3.0-card-consensus';
+  const KNOWLEDGE_SCHEMA_VERSION = 'mercador.encarte.knowledge.v4';
   const TESSERACT_VERSION = '5.1.1';
   const PDFJS_VERSION = base.PDFJS_VERSION || '5.7.284';
   const PDFJS_BASE = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}`;
@@ -490,22 +490,54 @@
   }
 
   const PRODUCT_CUE_RE=/\b(?:ABACATE|ABACAXI|ABOBORA|ABÓBORA|ABOBRINHA|ACELGA|ALHO|ALMEIRAO|ALMEIRÃO|ALFACE|BANANA|BATATA|BERINJELA|BETERRABA|BROCOLIS|BRÓCOLIS|CEBOLA|CENOURA|CHUCHU|COUVE|LARANJA|LIMAO|LIMÃO|MACA|MAÇÃ|MAMAO|MAMÃO|MANDIOCA|MANGA|MELANCIA|MELAO|MELÃO|MORANGO|MOURGOT|OVOS?|PEPINO|PERA|PIMENTAO|PIMENTÃO|REPOLHO|TANGERINA|TOMATE|UVA|VAGEM|FRANGO|BOVIN|SUIN|SUÍN|CARNE|COSTELA|PALETA|FILE|FILÉ|COXA|SOBRECOXA|PEITO|PERNIL|PANCETA|LINGUICA|LINGUIÇA|PRESUNTO|QUEIJO|MUSSARELA|MARGARINA|MANTEIGA|REQUEIJAO|REQUEIJÃO|IOGURTE|BEBIDA|LEITE|PAO|PÃO|BOLO|BROA|ROSCA|TORTA|SONHO|SALGADINHO|CAROLINA|EMPANADO|NUGGET|STEAK|SALSICHA|RAVIOLI|ARROZ|FEIJAO|FEIJÃO|CAFE|CAFÉ|ACUCAR|AÇÚCAR|OLEO|ÓLEO|MASSA|MACARR|BISCO|CHOC|REFRIG|CERVEJA|AGUA|ÁGUA|SABAO|SABÃO|DETERG|AMAC|PAPEL|SHAMPOO|SABONETE|FRALDA|DESOD|CARVAO|CARVÃO|AZEITE|FARINHA|MOLHO|MAIONESE|ATUM|MILHO)\b/i;
+  const CORE_PRODUCT_CUE_RE=/\b(?:FRANGO|BOVIN|SUIN|SUÍN|CARNE|COSTELA|PALETA|FILE|FILÉ|COXA|SOBRECOXA|PEITO|PERNIL|PANCETA|LINGUICA|LINGUIÇA|PRESUNTO|QUEIJO|MUSSARELA|MARGARINA|MANTEIGA|REQUEIJAO|REQUEIJÃO|IOGURTE|BEBIDA|LEITE|PAO|PÃO|BOLO|BROA|ROSCA|TORTA|SONHO|SALGADINHO|CAROLINA|EMPANADO|NUGGET|STEAK|SALSICHA|RAVIOLI|ARROZ|FEIJAO|FEIJÃO|CAFE|CAFÉ|ACUCAR|AÇÚCAR|OLEO|ÓLEO|MASSA|MACARR|BISCO|CHOC|REFRIG|CERVEJA|AGUA|ÁGUA|SABAO|SABÃO|DETERG|AMAC|PAPEL|SHAMPOO|SABONETE|FRALDA|DESOD|CARVAO|CARVÃO|AZEITE|FARINHA|MOLHO|MAIONESE|ATUM|MILHO)\b/i;
 
   function polishProductText(text) {
     let clean=sanitizeProductText(text)
+      // Confusões ópticas universais de OCR em nomes de supermercado. A correção só é
+      // aplicada à palavra inteira; não altera marcas ou descrições arbitrárias.
+      .replace(/\bLOGURTE\b/gi,'Iogurte')
+      .replace(/^(?:O|A)\s+(?=(?:GARRAFA|PACOTE|POTE|BANDEJA|LATA|PET)\b)/i,'')
       // Corrige unidades que o OCR costuma confundir somente em contexto inequívoco de embalagem.
       .replace(/\b(PACOTE|PCT|BANDEJA|BDJ|POTE|LATA|GARRAFA)\s*(\d{2,4})9\b/gi,'$1 $2g')
       .replace(/\b(PACOTE|PCT|BANDEJA|BDJ|POTE)\s+(\d{1,2})K[O0]\b/gi,'$1 $2Kg')
       // Condição promocional pertence ao card, mas não ao nome comercial do produto.
       .replace(/\bA\s+PARTIR\s+DE\s+\d+\s+UNIDADES?.*$/i,'')
       .replace(/\bAPARTRDE\s+\d+\s+UNIDADES?.*$/i,'')
+      // Faixas publicitárias não podem completar o nome do produto na borda do card.
+      .replace(/\b(?:ECONOMIA\s+NO\s+SEU\s+BOLSO|BOLSO\s+E\s+FARTURA|FARTURA\s+NO\s+CHURRASCO|TODA\s+A\s+LOJA).*$/i,'')
+      // Sequência como "Pacote To0g" é corrupção visual, não peso confiável. Retém o
+      // substantivo de embalagem e deixa a ausência de peso cair na validação, sem inventar.
+      .replace(/\b(PACOTE|PCT|BANDEJA|BDJ|POTE|GARRAFA)\s+T[O0]{2}G\b/gi,'$1')
       .trim();
     let tokens=clean.split(/\s+/).filter(Boolean);
+    const allowedShortEdge=/^(?:KG|G|GR|ML|L|LT|LTS|UN|UND|TP|PET|PCT|CX|BDJ|OU|DE|DA|DO|DAS|DOS|COM|SEM|E)$/i;
+    // Remove fragmentos curtos internos que o Tesseract cria a partir de bordas de foto/preço
+    // ("Er", "to", "ns" etc.). Conectivos e unidades legítimos continuam preservados.
+    tokens=tokens.filter((token)=>{const norm=fold(token).replace(/[^A-Z0-9]/g,'');return norm.length>2||allowedShortEdge.test(norm)||/^\d/.test(norm);});
+    while(tokens.length>2){
+      const tail=tokens[tokens.length-1],norm=fold(tail).replace(/[^A-Z0-9]/g,'');
+      if(norm.length<=2&&!allowedShortEdge.test(norm))tokens.pop();else break;
+    }
     const cueIndex=tokens.findIndex((token)=>PRODUCT_CUE_RE.test(token));
     if(cueIndex>0){
       const prefix=tokens.slice(0,cueIndex);
       const noisy=prefix.filter((t)=>fold(t).replace(/[^A-Z0-9]/g,'').length<=2||/[^A-Za-zÀ-ÿ0-9-]/.test(t)).length/Math.max(1,prefix.length);
-      if(noisy>=.45)tokens=tokens.slice(cueIndex);
+      if(noisy>=.45){
+        tokens=tokens.slice(cueIndex);
+      }else if(cueIndex>=2&&prefix.some((t)=>fold(t).replace(/[^A-Z0-9]/g,'').length<=2)){
+        // Se existe lixo curto antes do tipo de produto, preserva apenas o sufixo plausível
+        // imediatamente anterior ao produto (normalmente uma marca) e descarta o ruído remoto.
+        let keepFrom=cueIndex;
+        for(let i=cueIndex-1;i>=0;i-=1){
+          const norm=fold(tokens[i]).replace(/[^A-Z0-9]/g,'');
+          const plausible=norm.length>=3&&/[AEIOU]/.test(norm);
+          if(!plausible)break;
+          keepFrom=i;
+          if(cueIndex-i>=2)break;
+        }
+        if(keepFrom>0)tokens=tokens.slice(keepFrom);
+      }
     }
     const compact=[];
     for(let i=0;i<tokens.length;i+=1){
@@ -737,6 +769,19 @@
     return {...product,productName:text,productBox,ocrConfidence,semantic,ownershipConfidence,spatial,selectedFragments:selected,completeness};
   }
 
+  function descriptionNoisePenalty(text) {
+    const clean=polishProductText(text),tokens=clean.split(/\s+/).filter(Boolean);
+    let penalty=0;
+    tokens.forEach((token)=>{
+      const norm=fold(token).replace(/[^A-Z0-9]/g,'');
+      if(!norm)return;
+      if(norm.length<=2&&!/^(?:KG|G|GR|ML|L|LT|UN|TP|OU|DE|DA|DO|COM|SEM|E)$/.test(norm))penalty+=.18;
+      if(/[A-Z].*\d.*[A-Z]|\d.*[A-Z].*\d/.test(norm)&&!/^\d+(?:KG|G|ML|L|LT|UN)$/.test(norm))penalty+=.13;
+    });
+    if(/\b(?:FEM|NEH|GTA|CAMA|TO0G|T00G)\b/i.test(clean))penalty+=.22;
+    return clamp(penalty,0,.7);
+  }
+
   // Escolhe a melhor descrição entre as leituras independentes (página inteira, densa,
   // faixas verticais/horizontais). Uma leitura longa e coerente vence um fragmento curto;
   // leituras conflitantes são explicitamente marcadas para revisão.
@@ -769,7 +814,9 @@
       const partialPenalty=unique.some((o)=>o!==v&&descriptionContains(o.productName,v.productName)&&o.completeness>=v.completeness-.04&&o.productName.split(/\s+/).length>=words+2)?18:0;
       v.descriptionAgreement=agreement;
       v.variantSupport=support;
-      v.variantScore=v.completeness*150+v.semantic*115+Number(v.spatial||0)*52+Number(v.ownershipConfidence||0)*42+Number(v.ocrConfidence||0)*.16+support*16+containmentBonus+Math.min(words,12)*2-partialPenalty;
+      const noisePenalty=descriptionNoisePenalty(v.productName);
+      v.descriptionNoisePenalty=noisePenalty;
+      v.variantScore=v.completeness*150+v.semantic*115+Number(v.spatial||0)*52+Number(v.ownershipConfidence||0)*42+Number(v.ocrConfidence||0)*.16+support*16+containmentBonus+Math.min(words,12)*2-partialPenalty-noisePenalty*95;
     });
     unique.sort((a,b)=>b.variantScore-a.variantScore||b.completeness-a.completeness);
     const best=unique[0],runner=unique[1];
@@ -1040,15 +1087,27 @@
     const raw=[];
 
     prices.forEach((price,index)=>{
+      const refinement=matchRefinementForPrice(price,pageData.cardRefinements||[],pageData.canvasWidth);
+      const effectivePrice=refinement?.priceConfirmed
+        ? {...price,price:Number(refinement.refinedPrice)}
+        : price;
+
+      // Política fail-closed: um preço conflitante ou visualmente absurdo não aparece como
+      // promoção enquanto a releitura local não o confirmar. É preferível faltar um card na
+      // fila a exibir R$ 144,99 quando o encarte mostra R$ 14,99.
+      if(refinement&&!refinement.priceConfirmed&&(price.conflicts?.length||Number(price.price)>=100||!price.explicitCurrency))return;
+      if(!refinement&&Number(price.price)>=100)return;
+
       const variants=[];
       let mergedProduct=productForPrice(price,fragments,prices,pageData.canvasWidth);
-      if(mergedProduct){mergedProduct=expandProductDescription(mergedProduct,price,fragments,prices,pageData.canvasWidth);mergedProduct=completeOwnedProductDescription(mergedProduct,price,fragments,prices,pageData.canvasWidth);variants.push({...mergedProduct,descriptionPass:'merged'});}
+      if(mergedProduct){
+        mergedProduct=expandProductDescription(mergedProduct,price,fragments,prices,pageData.canvasWidth);
+        mergedProduct=completeOwnedProductDescription(mergedProduct,price,fragments,prices,pageData.canvasWidth);
+        variants.push({...mergedProduct,descriptionPass:'merged'});
+      }
 
-      // Reavalia a descrição em cada passagem que realmente enxergou este preço. Isso evita
-      // que o merge global escolha apenas a última linha ("Fatiado Seara") quando uma leitura
-      // densa possui o nome completo ("Presunto Sem Capa ... Fatiado Seara Pacote 200g").
       (price.observations||[]).forEach((observation)=>{
-        if(observation.pass==='color')return; // máscara cromática ajuda no preço, não na descrição.
+        if(observation.pass==='color')return;
         const ctx=passContexts.find((x)=>x.entry.pass===observation.pass);
         if(!ctx)return;
         let localPrice=ctx.prices.find((p)=>p===observation);
@@ -1061,24 +1120,110 @@
         }
         if(!localPrice)return;
         let local=productForPrice(localPrice,ctx.fragments,ctx.prices,pageData.canvasWidth);
-        if(local){local=expandProductDescription(local,localPrice,ctx.fragments,ctx.prices,pageData.canvasWidth);local=completeOwnedProductDescription(local,localPrice,ctx.fragments,ctx.prices,pageData.canvasWidth);variants.push({...local,descriptionPass:observation.pass});}
+        if(local){
+          local=expandProductDescription(local,localPrice,ctx.fragments,ctx.prices,pageData.canvasWidth);
+          local=completeOwnedProductDescription(local,localPrice,ctx.fragments,ctx.prices,pageData.canvasWidth);
+          variants.push({...local,descriptionPass:observation.pass});
+        }
       });
 
-      const product=chooseProductDescriptionVariant(variants);
+      // Reinterpreta também as palavras do OCR global, mas somente dentro da caixa isolada
+      // do card. Essa variante costuma preservar acentos/marcas que uma releitura local pode
+      // simplificar, sem permitir que o texto atravesse para o produto vizinho.
+      if(refinement?.card?.rect){
+        const rr=refinement.card.rect;
+        const cardWords=(pageData.words||[]).filter((w)=>{
+          const wc=center(w);
+          return wc.x>=rr.x0&&wc.x<=rr.x1&&wc.y>=rr.y0&&wc.y<=rr.y1;
+        });
+        if(cardWords.length){
+          const cardFragments=buildTextFragments(cardWords,prices,pageData.canvasWidth);
+          let cardGlobal=productForPrice(price,cardFragments,prices,pageData.canvasWidth);
+          if(cardGlobal){
+            cardGlobal=expandProductDescription(cardGlobal,price,cardFragments,prices,pageData.canvasWidth);
+            cardGlobal=completeOwnedProductDescription(cardGlobal,price,cardFragments,prices,pageData.canvasWidth);
+            variants.push({...cardGlobal,descriptionPass:'card-global-filtered'});
+          }
+        }
+      }
+
+      let cardLocal=null;
+      if(refinement?.productConfirmed&&refinement.product){
+        cardLocal={
+          ...refinement.product,
+          descriptionPass:'card-reread',
+          completeness:Number(refinement.descriptionCompleteness||descriptionCompletenessScore(refinement.product.productName)),
+          descriptionAgreement:Number(refinement.descriptionAgreement||refinement.product.descriptionAgreement||1),
+          descriptionVariantCount:Math.max(1,Number(refinement.product.descriptionVariantCount||1)),
+          descriptionFidelity:clamp(
+            Number(refinement.descriptionCompleteness||0)*.50+
+            Number(refinement.product.semantic||0)*.30+
+            Number(refinement.product.spatial||0)*.12+
+            Number(refinement.descriptionAgreement||0)*.08,0,1
+          )
+        };
+        variants.push(cardLocal);
+      }
+
+      let product=chooseProductDescriptionVariant(variants);
+      if(cardLocal){
+        // A releitura isolada do card tem prioridade sobre uma frase global contaminada por
+        // produto vizinho. Ela só vence se passou os gates de completude/semântica acima.
+        const sim=product?descriptionSimilarity(product.productName,cardLocal.productName):0;
+        const localComp=descriptionCompletenessScore(cardLocal.productName);
+        const globalComp=product?descriptionCompletenessScore(product.productName):0;
+        if(!product||sim<.50||localComp>=globalComp-.035){
+          product={...cardLocal,
+            descriptionConflict:Boolean(product&&sim<.28&&globalComp>=.60),
+            descriptionVariantCount:Math.max(Number(cardLocal.descriptionVariantCount||1),Number(product?.descriptionVariantCount||1)),
+            descriptionAgreement:Math.max(Number(cardLocal.descriptionAgreement||0),sim)
+          };
+        }
+      }
+
       if(!product||!product.productName||product.productName.length<3)return;
       if(isInstitutionalText(product.productName))return;
       const wordsCount=product.productName.split(/\s+/).filter(Boolean).length;
       if(wordsCount<1||product.semantic<.34)return;
+
+      // Em página OCR, o nome exibido precisa ter passado pela releitura local ou ser muito
+      // forte nas evidências globais. Isso elimina textos como "fem io..." e slogans mutilados.
+      if((pageData.cardRefinements||[]).length&&refinement&&!refinement.productConfirmed){
+        // Em modo profissional, releitura local não confirmada não vira oferta visível.
+        // O dado continua preservado no JSON do card para diagnóstico, mas não aparece como
+        // promoção e jamais pode ser publicado por engano.
+        return;
+      }
+
       const packageText=extractPackage(product.productName);
-      const quality=candidateConfidence({product,price,validity,packageText,wordsCount});
+      const quality=candidateConfidence({product,price:effectivePrice,validity,packageText,wordsCount});
+      let confidence=quality.confidence;
+      let structuralSafe=quality.structuralSafe;
+      let automationSafe=quality.automationSafe;
+      const riskFlags=[...(quality.risks||[])];
+      const evidence=[...(quality.evidence||[])];
+
+      if(refinement){
+        if(refinement.productConfirmed)evidence.push('descrição relida isoladamente no próprio card');
+        else{
+          riskFlags.push('ocr_card_description_unconfirmed');
+          confidence=Math.min(confidence,.86);structuralSafe=false;automationSafe=false;
+        }
+        if(refinement.priceConfirmed)evidence.push('preço confirmado por releitura numérica do próprio card');
+        else{
+          riskFlags.push('ocr_card_price_unconfirmed');
+          confidence=Math.min(confidence,.86);structuralSafe=false;automationSafe=false;
+        }
+      }
+
       const category=inferCategory?(inferCategory(product.productName)||'outros'):'outros';
       const sourceBoxCanvas=unionBoxes([product.productBox,price.box]);
       raw.push({
         id:`ocr-p${pageData.pageNumber}-${index}`,
         pageNumber:pageData.pageNumber,pageWidth:pageData.pageWidth,pageHeight:pageData.pageHeight,
         productName:product.productName,category,brand:'',packageText,
-        price:price.price,previousPrice:null,detectedPrices:[price.price],priceKind:'general',requiresClub:false,clubName:'',clubSignal:false,
-        conditions:validity?.condition||'',confidence:quality.confidence,riskFlags:quality.risks,evidence:quality.evidence,
+        price:Number(effectivePrice.price),previousPrice:null,detectedPrices:[Number(effectivePrice.price)],priceKind:'general',requiresClub:false,clubName:'',clubSignal:false,
+        conditions:validity?.condition||'',confidence,riskFlags:[...new Set(riskFlags)],evidence:[...new Set(evidence)],
         associationAgreement:product.spatial,
         ownershipConfidence:product.ownershipConfidence,
         clusterCoherence:Number(product.descriptionFidelity ?? product.semantic),
@@ -1086,19 +1231,26 @@
         descriptionAgreement:Number(product.descriptionAgreement ?? 1),
         descriptionVariantCount:Number(product.descriptionVariantCount || 1),
         descriptionPass:product.descriptionPass || 'merged',
-        knowledgeCardText:cleanText((product.selectedFragments||[]).map((x)=>x.fragment?.text||'').join(' ')),
+        knowledgeCardText:refinement?.localText||cleanText((product.selectedFragments||[]).map((x)=>x.fragment?.text||'').join(' ')),
         knowledgeOwnerConfidence:Number(product.ownershipConfidence||0),
-        // Mantidos também para compatibilidade com versões intermediárias.
+        cardReread:refinement?{
+          productConfirmed:refinement.productConfirmed===true,
+          priceConfirmed:refinement.priceConfirmed===true,
+          originalPrice:Number(refinement.originalPrice||price.price),
+          refinedPrice:Number(refinement.refinedPrice||effectivePrice.price),
+          priceReadings:[...(refinement.priceReadings||[])],
+          priceVotes:[...(refinement.priceVotes||[])]
+        }:null,
         domainOwnership:product.ownershipConfidence,blockCoherence:Number(product.descriptionFidelity ?? product.semantic),
-        structuralSafe:quality.structuralSafe,automationSafe:quality.automationSafe,
+        structuralSafe,automationSafe,
         sourceBox:toSourceBox(sourceBoxCanvas,pageData.renderScale),startAt:validity?.startAt||null,endAt:validity?.endAt||null,
         verified:false,verificationMode:'',ignored:false,published:false,reviewed:false,
-        extractionMode:'ocr-image-fallback',ocrConfidence:Number(((product.ocrConfidence+price.confidence)/2/100).toFixed(3)),
-        ocrPricePasses:price.passCount,ocrPriceScale:Number(price.scale.toFixed(2)),ocrSemanticScore:Number(product.semantic.toFixed(3)),ocrDescriptionCompleteness:Number((product.completeness ?? descriptionCompletenessScore(product.productName)).toFixed(3)),ocrDescriptionAgreement:Number((product.descriptionAgreement ?? 1).toFixed(3))
+        extractionMode:refinement?'ocr-card-reread':'ocr-image-fallback',
+        ocrConfidence:Number(((product.ocrConfidence+effectivePrice.confidence)/2/100).toFixed(3)),
+        ocrPricePasses:effectivePrice.passCount,ocrPriceScale:Number(effectivePrice.scale.toFixed(2)),ocrSemanticScore:Number(product.semantic.toFixed(3)),ocrDescriptionCompleteness:Number((product.completeness ?? descriptionCompletenessScore(product.productName)).toFixed(3)),ocrDescriptionAgreement:Number((product.descriptionAgreement ?? 1).toFixed(3))
       });
     });
 
-    // Duplicatas do mesmo card/preço são descartadas. Candidatos semanticamente melhores vencem.
     const dedup=[];
     raw.sort((a,b)=>b.confidence-a.confidence||b.clusterCoherence-a.clusterCoherence).forEach((candidate)=>{
       const cb=candidate.sourceBox||{},ccx=(cb.x||0)+(cb.width||0)/2,ccy=(cb.y||0)+(cb.height||0)/2;
@@ -1135,19 +1287,41 @@
   }
 
   function cropCanvas(source,x0,y0,x1,y1) {
-    const left=Math.max(0,Math.floor(x0)),top=Math.max(0,Math.floor(y0));
-    const right=Math.min(source.width,Math.ceil(x1)),bottom=Math.min(source.height,Math.ceil(y1));
-    const canvas=document.createElement('canvas');canvas.width=Math.max(1,right-left);canvas.height=Math.max(1,bottom-top);
-    const ctx=canvas.getContext('2d',{alpha:false});ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(source,left,top,canvas.width,canvas.height,0,0,canvas.width,canvas.height);
-    return {canvas,offsetX:left,offsetY:top};
+    const sw=Math.max(1,Number(source?.width||0)),sh=Math.max(1,Number(source?.height||0));
+    const left=clamp(Math.floor(Number(x0)||0),0,Math.max(0,sw-1));
+    const top=clamp(Math.floor(Number(y0)||0),0,Math.max(0,sh-1));
+    const right=clamp(Math.ceil(Number(x1)||0),left+1,sw);
+    const bottom=clamp(Math.ceil(Number(y1)||0),top+1,sh);
+    const width=Math.max(1,right-left),height=Math.max(1,bottom-top);
+    const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+    const ctx=canvas.getContext('2d',{alpha:false});ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);
+    if(width>1&&height>1&&left<sw&&top<sh){ctx.drawImage(source,left,top,width,height,0,0,width,height);}
+    return {canvas,offsetX:left,offsetY:top,width,height,valid:width>1&&height>1};
   }
 
   async function recognizePass(worker,canvas,{pass,psm='11',offsetX=0,offsetY=0}={}) {
-    await worker.setParameters({preserve_interword_spaces:'1',tessedit_pageseg_mode:String(psm)}).catch(()=>{});
+    // Garante que parâmetros de uma releitura especializada de preço não vazem para o OCR textual.
+    await worker.setParameters({
+      preserve_interword_spaces:'1',
+      tessedit_pageseg_mode:String(psm),
+      tessedit_char_whitelist:''
+    }).catch(()=>{});
     const result=await worker.recognize(canvas);
     const words=normalizeOcrWords(result.data,{pass,offsetX,offsetY});
     const lines=segmentRows(words);
     return {pass,words,lines,text:cleanText(result.data?.text||lines.map((x)=>x.text).join(' ')),medianWordHeight:median(words.map((w)=>w.height))||16};
+  }
+
+  async function recognizePricePass(worker,canvas,{pass,psm='7',offsetX=0,offsetY=0}={}) {
+    await worker.setParameters({
+      preserve_interword_spaces:'1',
+      tessedit_pageseg_mode:String(psm),
+      tessedit_char_whitelist:'R$0123456789,.'
+    }).catch(()=>{});
+    const result=await worker.recognize(canvas);
+    const raw=cleanText(result.data?.text||'');
+    const words=normalizeOcrWords(result.data,{pass,offsetX,offsetY});
+    return {pass,raw,words,lines:segmentRows(words),medianWordHeight:median(words.map((w)=>w.height))||16};
   }
 
 
@@ -1240,7 +1414,42 @@
       extraction:{modes,pdfjsVersion:PDFJS_VERSION,tesseractVersion:TESSERACT_VERSION,legacyValidator:legacyResult?.engineVersion||base.ENGINE_VERSION||'2.2.0'},
       validity:validity||null,
       documentText,
-      pages:pages.map((page)=>({pageNumber:page.pageNumber,width:Number(page.pageWidth||0),height:Number(page.pageHeight||0),mode:page.knowledgeMode||'unknown',text:page.text||'',metrics:{words:page.words?.length||0,lines:page.lines?.length||0,pricesDetected:Number(page.priceCoverageCount||0),expectedPriceFloor:Number(page.expectedPriceFloor||0),coveragePasses:Number(page.coveragePasses||0)},words:(page.words||[]).map(serializableWord),lines:(page.lines||[]).map(serializableLine),prices:knowledgePriceFacts(page)})),
+      pages:pages.map((page)=>({
+        pageNumber:page.pageNumber,width:Number(page.pageWidth||0),height:Number(page.pageHeight||0),
+        mode:page.knowledgeMode||'unknown',text:page.text||'',
+        metrics:{
+          words:page.words?.length||0,lines:page.lines?.length||0,
+          pricesDetected:Number(page.priceCoverageCount||0),
+          expectedPriceFloor:Number(page.expectedPriceFloor||0),
+          coveragePasses:Number(page.coveragePasses||0),
+          cardsReread:Number(page.cardRefinements?.length||0)
+        },
+        words:(page.words||[]).map(serializableWord),
+        lines:(page.lines||[]).map(serializableLine),
+        prices:knowledgePriceFacts(page),
+        cards:(page.cardRefinements||[]).map((card)=>({
+          id:card.id||'',
+          bbox:card.rect?{
+            x:Number(card.rect.x0||0)/Math.max(1,Number(page.renderScale||1)),
+            y:Number(card.rect.y0||0)/Math.max(1,Number(page.renderScale||1)),
+            width:Number(card.rect.width||0)/Math.max(1,Number(page.renderScale||1)),
+            height:Number(card.rect.height||0)/Math.max(1,Number(page.renderScale||1))
+          }:null,
+          text:card.text||'',
+          passes:[...(card.passes||[])],
+          matches:(card.matches||[]).map((match)=>({
+            originalPrice:Number(match.originalPrice||0),
+            refinedPrice:Number(match.refinedPrice||0),
+            priceConfirmed:match.priceConfirmed===true,
+            productName:match.productName||'',
+            productConfirmed:match.productConfirmed===true,
+            descriptionAgreement:Number(match.descriptionAgreement||0),
+            descriptionCompleteness:Number(match.descriptionCompleteness||0),
+            priceReadings:[...(match.priceReadings||[])],
+            priceVotes:[...(match.priceVotes||[])]
+          }))
+        }))
+      })),
       promotionFacts:(candidates||[]).map((c)=>({id:c.id,pageNumber:c.pageNumber,productName:c.productName,category:c.category||'outros',packageText:c.packageText||'',price:Number(c.price||0),previousPrice:Number(c.previousPrice||0)||null,priceKind:c.priceKind||'general',conditions:c.conditions||'',confidence:Number(c.confidence||0),riskFlags:[...(c.riskFlags||[])],evidence:[...(c.evidence||[])],bbox:c.sourceBox||null,sourceCardText:c.knowledgeCardText||'',ownerConfidence:Number(c.knowledgeOwnerConfidence||c.ownershipConfidence||0),descriptionCompleteness:Number(c.descriptionCompleteness||0),descriptionAgreement:Number(c.descriptionAgreement||0),knowledgeMode:c.knowledgeMode||c.extractionMode||''}))
     };
   }
@@ -1299,6 +1508,487 @@
       if(!duplicate)dedup.push(candidate);
     });
     return dedup;
+  }
+
+
+  function ocrEditDistance(a,b) {
+    const A=fold(a).replace(/[^A-Z0-9]/g,''),B=fold(b).replace(/[^A-Z0-9]/g,'');
+    if(A===B)return 0;
+    if(!A.length)return B.length;if(!B.length)return A.length;
+    const prev=Array.from({length:B.length+1},(_,i)=>i),cur=new Array(B.length+1);
+    for(let i=1;i<=A.length;i+=1){cur[0]=i;for(let j=1;j<=B.length;j+=1){cur[j]=Math.min(cur[j-1]+1,prev[j]+1,prev[j-1]+(A[i-1]===B[j-1]?0:1));}for(let j=0;j<=B.length;j+=1)prev[j]=cur[j];}
+    return prev[B.length];
+  }
+
+  function ocrTokensEquivalent(a,b) {
+    const A=fold(a).replace(/[^A-Z0-9]/g,''),B=fold(b).replace(/[^A-Z0-9]/g,'');
+    if(!A||!B)return false;if(A===B)return true;
+    const maxLen=Math.max(A.length,B.length),dist=ocrEditDistance(A,B);
+    if(maxLen<=3)return dist<=1;
+    return dist<=1||(maxLen>=7&&dist<=2);
+  }
+
+  // Consolida palavras de PSMs diferentes pela MESMA posição física. Isso é decisivo em
+  // encartes: se uma passagem lê "ProBioZ" e duas leem "ProBio2", o JSON preserva o consenso
+  // "ProBio2" em vez de escolher cegamente a leitura de maior confidence.
+  function consensusOcrPass(passes,{pass='card-consensus'}={}) {
+    const observations=[];
+    (passes||[]).filter(Boolean).forEach((entry)=>{
+      (entry.words||[]).forEach((word)=>{
+        if(!word?.text||!word.width||!word.height)return;
+        const wc=center(word);
+        let group=observations.find((g)=>{
+          const gc=center(g.box);
+          const overlap=intersectionRatio(g.box,word);
+          const close=Math.hypot(gc.x-wc.x,gc.y-wc.y)<=Math.max(10,Math.min(Number(g.box.height||0),Number(word.height||0))*.72);
+          return (overlap>=.46||close)&&ocrTokensEquivalent(g.bestText,word.text);
+        });
+        if(!group){group={box:{...word},items:[],bestText:word.text};observations.push(group);}
+        group.items.push(word);
+        group.box=unionBoxes(group.items);
+        const variants=[];
+        group.items.forEach((item)=>{
+          let v=variants.find((x)=>ocrTokensEquivalent(x.text,item.text));
+          if(!v){v={text:item.text,count:0,confidence:0,exact:new Map()};variants.push(v);}
+          v.count+=1;v.confidence+=Number(item.confidence||0);
+          const key=fold(item.text);v.exact.set(key,(v.exact.get(key)||0)+1);
+        });
+        variants.forEach((v)=>{v.exactBest=[...v.exact.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]||fold(v.text);});
+        variants.sort((a,b)=>b.count-a.count||b.confidence-a.confidence||b.text.length-a.text.length);
+        const winner=variants[0];
+        // Dentro de um grupo fuzzy, prefere a grafia exata que apareceu mais vezes. Se empatar,
+        // usa a observação de maior confiança daquela grafia.
+        const exactCounts=new Map();group.items.forEach((item)=>{const k=fold(item.text);exactCounts.set(k,(exactCounts.get(k)||0)+1);});
+        const bestExact=[...exactCounts.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0];
+        const eligible=group.items.filter((item)=>!bestExact||fold(item.text)===bestExact);
+        const bestItem=(eligible.length?eligible:group.items).sort((a,b)=>Number(b.confidence||0)-Number(a.confidence||0))[0];
+        group.bestText=bestItem?.text||winner.text;
+      });
+    });
+    const words=observations.map((group,index)=>{
+      const box=group.box,items=group.items;
+      const exactCounts=new Map();items.forEach((item)=>{const k=fold(item.text);exactCounts.set(k,(exactCounts.get(k)||0)+1);});
+      const bestExact=[...exactCounts.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0];
+      const same=items.filter((item)=>!bestExact||fold(item.text)===bestExact);
+      const best=(same.length?same:items).sort((a,b)=>Number(b.confidence||0)-Number(a.confidence||0))[0];
+      return {id:`${pass}-${index}`,pass,text:best?.text||group.bestText,confidence:items.reduce((sum,x)=>sum+Number(x.confidence||0),0)/items.length,x0:box.x0,y0:box.y0,x1:box.x1,y1:box.y1,width:box.width,height:box.height,consensusVotes:Math.max(...exactCounts.values()),consensusPasses:items.length};
+    });
+    const lines=segmentRows(words);
+    return {pass,words,lines,text:cleanText(lines.map((x)=>x.text).join(' ')),medianWordHeight:median(words.map((w)=>w.height))||16};
+  }
+
+  function likelySameOfferCard(a,b,pageWidth=1200) {
+    if(!a||!b||!a.box||!b.box)return false;
+    if(pricesShareCard(a,b))return true;
+    const A=center(a.box),B=center(b.box);
+    const h=Math.max(Number(a.box.height||0),Number(b.box.height||0),18);
+    return Math.abs(A.x-B.x)<=Math.max(118,pageWidth*.055)
+      && Math.abs(A.y-B.y)<=Math.max(82,h*2.65);
+  }
+
+  function groupPricesIntoOfferCards(prices,pageWidth=1200) {
+    const groups=[];
+    (prices||[]).forEach((price)=>{
+      const matches=groups.filter((group)=>group.prices.some((p)=>likelySameOfferCard(p,price,pageWidth)));
+      if(!matches.length){groups.push({prices:[price]});return;}
+      const target=matches[0];target.prices.push(price);
+      matches.slice(1).forEach((other)=>{
+        target.prices.push(...other.prices);
+        const idx=groups.indexOf(other);if(idx>=0)groups.splice(idx,1);
+      });
+    });
+    groups.forEach((group,index)=>{
+      group.id=`card-${index+1}`;
+      group.box=unionBoxes(group.prices.map((p)=>p.box));
+      group.cx=group.prices.reduce((sum,p)=>sum+center(p.box).x,0)/group.prices.length;
+      group.cy=group.prices.reduce((sum,p)=>sum+center(p.box).y,0)/group.prices.length;
+    });
+    return groups;
+  }
+
+  function deriveOfferCardRect(group,groups,pageWidth,pageHeight) {
+    const rowTol=Math.max(105,pageWidth*.045);
+    const peers=(groups||[]).filter((g)=>g!==group&&Math.abs(g.cy-group.cy)<=rowTol);
+    const leftPeer=peers.filter((g)=>g.cx<group.cx).sort((a,b)=>b.cx-a.cx)[0];
+    const rightPeer=peers.filter((g)=>g.cx>group.cx).sort((a,b)=>a.cx-b.cx)[0];
+
+    let x0=leftPeer?(leftPeer.cx+group.cx)/2:group.cx-Math.max(205,pageWidth*.092);
+    let x1=rightPeer?(rightPeer.cx+group.cx)/2:group.cx+Math.max(205,pageWidth*.092);
+    x0=Math.min(x0,group.box.x0-18);x1=Math.max(x1,group.box.x1+18);
+    // O OCR local precisa enxergar a palavra inteira mesmo quando ela encosta na divisória
+    // entre dois cards. O recorte pode sobrepor levemente o vizinho porque a propriedade
+    // de cada palavra continua sendo calculada contra TODOS os preços da página.
+    const horizontalOverlap=Math.max(42,Math.min(72,pageWidth*.022));
+    x0=clamp(x0-horizontalOverlap,0,pageWidth);
+    x1=clamp(x1+horizontalOverlap,0,pageWidth);
+
+    const verticalPeers=(groups||[]).filter((g)=>g!==group&&g.cx>=x0-70&&g.cx<=x1+70);
+    const above=verticalPeers.filter((g)=>g.cy<group.cy-38).sort((a,b)=>b.cy-a.cy)[0];
+    const below=verticalPeers.filter((g)=>g.cy>group.cy+38).sort((a,b)=>a.cy-b.cy)[0];
+    const defaultTop=group.cy-Math.max(315,pageWidth*.135);
+    const defaultBottom=group.cy+Math.max(105,pageWidth*.048);
+    const aboveMid=above?(above.cy+group.cy)/2:null;
+    const belowMid=below?(below.cy+group.cy)/2:null;
+    const overlapTop=above?Math.min(26,Math.max(8,(group.cy-above.cy)*.08)):0;
+    const overlapBottom=below?Math.min(18,Math.max(6,(below.cy-group.cy)*.05)):0;
+    let y0=above?aboveMid-overlapTop:defaultTop;
+    let y1=below?belowMid+overlapBottom:defaultBottom;
+
+    // O texto comercial normalmente está acima/ao lado do preço. Quando existe um card
+    // imediatamente acima/abaixo, o ponto médio entre os preços é tratado como fronteira dura,
+    // admitindo apenas uma sobreposição pequena para não cortar uma linha na borda.
+    if(!above)y0=Math.min(y0,group.box.y0-Math.max(125,pageWidth*.052));
+    y1=Math.max(y1,group.box.y1+Math.max(46,pageWidth*.018));
+    y0=clamp(y0,0,pageHeight);y1=clamp(y1,0,pageHeight);
+    if(y1-y0<170){
+      const mid=(y0+y1)/2;y0=clamp(mid-100,0,pageHeight);y1=clamp(mid+100,0,pageHeight);
+    }
+    if(x1-x0<150){
+      const mid=(x0+x1)/2;x0=clamp(mid-90,0,pageWidth);x1=clamp(mid+90,0,pageWidth);
+    }
+    return {x0,y0,x1,y1,width:x1-x0,height:y1-y0};
+  }
+
+  function dedicatedPriceValue(raw) {
+    const t=normalizeNumericOcr(raw).replace(/\s+/g,' ');
+    let m=t.match(/(\d{1,4})\s*[,.;:]\s*(\d{2})(?!\d)/);
+    if(m){
+      const value=Number(`${m[1]}.${m[2]}`);
+      return Number.isFinite(value)&&value>=.05&&value<10000?Number(value.toFixed(2)):null;
+    }
+    const groups=(t.match(/\d+/g)||[]);
+    if(groups.length===1&&groups[0].length>=3&&groups[0].length<=5){
+      const digits=groups[0],value=Number(`${digits.slice(0,-2)}.${digits.slice(-2)}`);
+      return Number.isFinite(value)&&value>=.05&&value<10000?Number(value.toFixed(2)):null;
+    }
+    if(groups.length===2&&groups[1].length===2&&groups[0].length<=4){
+      const value=Number(`${groups[0]}.${groups[1]}`);
+      return Number.isFinite(value)&&value>=.05&&value<10000?Number(value.toFixed(2)):null;
+    }
+    return null;
+  }
+
+  function priceMicroRect(price,cardRect,pageWidth,pageHeight) {
+    const b=price.box,h=Math.max(14,Number(b.height||0));
+    const x0=clamp(Math.max(cardRect.x0,b.x0-Math.max(24,h*.8)),0,pageWidth);
+    const x1=clamp(Math.min(cardRect.x1,b.x1+Math.max(74,h*2.7)),0,pageWidth);
+    const y0=clamp(Math.max(cardRect.y0,b.y0-Math.max(24,h*.65)),0,pageHeight);
+    const y1=clamp(Math.min(cardRect.y1,b.y1+Math.max(34,h*.95)),0,pageHeight);
+    return {x0,y0,x1,y1,width:x1-x0,height:y1-y0};
+  }
+
+  function cueAnchoredLocalProduct(pass,anchorPrice,allPagePrices,pageWidth) {
+    const rawLines=(pass?.lines||[]).map((line)=>{
+      const text=polishProductText(line.text||'');
+      if(!text||isInstitutionalText(text))return null;
+      if(/R\s*\$|\b\d{1,4}\s*[,.;:]\s*\d{2}\b/i.test(text))return null;
+      const fragment={text,box:line.box,confidence:Number(line.confidence||0)};
+      const ownership=ownershipForFragment(anchorPrice,fragment,allPagePrices||[anchorPrice],pageWidth);
+      const semantic=productSemanticScore(text,fragment.confidence);
+      const packageOnly=Boolean(extractPackage(text));
+      const connector=/^(?:OU|COM|SEM|DE|DA|DO|DAS|DOS|E)$/i.test(fold(text));
+      return {line,fragment,ownership,semantic,packageOnly,connector,cue:PRODUCT_CUE_RE.test(text),strongCue:CORE_PRODUCT_CUE_RE.test(text)};
+    }).filter(Boolean).filter((x)=>{
+      if(!x.ownership.accepted&&Number(x.ownership.confidence||0)<.42)return false;
+      if(x.fragment.box.y0>anchorPrice.box.y1+62)return false;
+      if(x.semantic<.16&&!x.packageOnly&&!x.connector)return false;
+      return true;
+    });
+    const anchors=rawLines.filter((x)=>x.cue);
+    if(!anchors.length)return null;
+    let best=null;
+    for(const anchor of anchors){
+      const selected=[anchor];
+      let box=anchor.fragment.box;
+      let changed=true;
+      while(changed){
+        changed=false;
+        const candidates=rawLines.filter((x)=>!selected.includes(x)).map((x)=>{
+          const b=x.fragment.box;
+          const gapAbove=box.y0-b.y1,gapBelow=b.y0-box.y1;
+          const verticalNear=(gapAbove>=-8&&gapAbove<=58)||(gapBelow>=-8&&gapBelow<=58)||(b.y0<=box.y1&&b.y1>=box.y0);
+          if(!verticalNear)return null;
+          const overlap=overlap1d(b.x0,b.x1,box.x0-55,box.x1+55);
+          const centerDiff=Math.abs(center(b).x-center(box).x);
+          if(overlap<=0&&centerDiff>Math.max(110,pageWidth*.055))return null;
+          const distance=Math.min(
+            Math.abs(gapAbove>=0?gapAbove:9999),
+            Math.abs(gapBelow>=0?gapBelow:9999),
+            Math.abs(center(b).y-center(box).y)
+          );
+          return {x,distance};
+        }).filter(Boolean).sort((a,b)=>a.distance-b.distance||b.x.semantic-a.x.semantic);
+        if(candidates.length){
+          const next=candidates[0].x;
+          selected.push(next);box=unionBoxes(selected.map((x)=>x.fragment.box));changed=true;
+          if(selected.length>=6)changed=false;
+        }
+      }
+      selected.sort((a,b)=>a.fragment.box.y0-b.fragment.box.y0||a.fragment.box.x0-b.fragment.box.x0);
+      const text=polishProductText(selected.map((x)=>x.fragment.text).join(' '));
+      if(!text||isInstitutionalText(text))continue;
+      const words=text.split(/\s+/).filter(Boolean);
+      if(words.length>16)continue;
+      const ocrConfidence=selected.reduce((sum,x)=>sum+Number(x.fragment.confidence||0),0)/selected.length;
+      const semantic=productSemanticScore(text,ocrConfidence);
+      const completeness=descriptionCompletenessScore(text);
+      const ownershipConfidence=selected.reduce((sum,x)=>sum+Number(x.ownership.confidence||0),0)/selected.length;
+      const productBox=unionBoxes(selected.map((x)=>x.fragment.box));
+      const pc=center(anchorPrice.box);
+      const horizontal=rangeDistance(pc.x,productBox.x0-15,productBox.x1+15);
+      const vertical=productBox.y1<=anchorPrice.box.y0?anchorPrice.box.y0-productBox.y1:Math.abs(center(productBox).y-pc.y);
+      const spatial=clamp(1-horizontal/Math.max(180,pageWidth*.09)-vertical/Math.max(310,pageWidth*.16),0,1);
+      const firstToken=fold(words[0]||'');
+      const startsWithCue=PRODUCT_CUE_RE.test(firstToken);
+      const strongCue=selected.some((x)=>x.strongCue);
+      const score=completeness*180+semantic*130+ownershipConfidence*62+ocrConfidence*.18+Math.min(words.length,12)*2+(startsWithCue?58:0)+(strongCue?42:0);
+      if(!best||score>best.score){
+        best={score,productName:text,productBox,ocrConfidence,semantic,ownershipConfidence,spatial,
+          selectedFragments:selected.map((x)=>({fragment:x.fragment,ownership:x.ownership})),completeness};
+      }
+    }
+    return best;
+  }
+
+  function fallbackProductFromLocalPass(pass,anchorPrice,pageWidth) {
+    const pc=center(anchorPrice.box);
+    const candidates=(pass?.lines||[]).filter((line)=>{
+      if(!line?.text||isNoiseLine(line)||isInstitutionalText(line.text))return false;
+      if(/R\s*\$|\b\d{1,4}\s*[,.;:]\s*\d{2}\b/i.test(line.text))return false;
+      const box=line.box;if(!box)return false;
+      if(box.y0>anchorPrice.box.y1+34)return false;
+      const horizontal=rangeDistance(pc.x,box.x0-12,box.x1+12);
+      if(horizontal>Math.max(145,pageWidth*.075))return false;
+      return true;
+    });
+    let best=null;
+    for(let i=0;i<candidates.length;i+=1){
+      for(let len=1;len<=4&&i+len<=candidates.length;len+=1){
+        const subset=candidates.slice(i,i+len);
+        let contiguous=true;
+        for(let k=1;k<subset.length;k+=1){
+          if(subset[k].box.y0-subset[k-1].box.y1>58){contiguous=false;break;}
+        }
+        if(!contiguous)continue;
+        const text=polishProductText(subset.map((x)=>x.text).join(' '));
+        if(!text||isInstitutionalText(text))continue;
+        const ocrConfidence=subset.reduce((sum,x)=>sum+Number(x.confidence||0),0)/subset.length;
+        const semantic=productSemanticScore(text,ocrConfidence);
+        const completeness=descriptionCompletenessScore(text);
+        const box=unionBoxes(subset.map((x)=>x.box));
+        const horizontal=rangeDistance(pc.x,box.x0-10,box.x1+10);
+        const vertical=box.y1<=anchorPrice.box.y0?anchorPrice.box.y0-box.y1:Math.abs(center(box).y-pc.y);
+        const spatial=clamp(1-horizontal/Math.max(150,pageWidth*.08)-vertical/Math.max(270,pageWidth*.14),0,1);
+        const score=completeness*155+semantic*125+spatial*58+ocrConfidence*.18;
+        if((PRODUCT_CUE_RE.test(text)||extractPackage(text)||semantic>=.72)&&(!best||score>best.score)){
+          best={score,productName:text,productBox:box,ocrConfidence,semantic,ownershipConfidence:.92,spatial,selectedFragments:subset.map((line)=>({fragment:{text:line.text,box:line.box,confidence:line.confidence},ownership:{confidence:.92}})),completeness};
+        }
+      }
+    }
+    return best;
+  }
+
+  function localProductFromPass(pass,anchorPrice,allPagePrices,pageWidth) {
+    const localPrices=collectPassPrices(pass);
+    const ac=center(anchorPrice.box);
+    const matched=[...localPrices].sort((a,b)=>{
+      const A=center(a.box),B=center(b.box);
+      const da=Math.hypot(A.x-ac.x,A.y-ac.y),db=Math.hypot(B.x-ac.x,B.y-ac.y);
+      const va=Math.abs(Number(a.price)-Number(anchorPrice.price))<.011?-70:0;
+      const vb=Math.abs(Number(b.price)-Number(anchorPrice.price))<.011?-70:0;
+      return (da+va)-(db+vb);
+    })[0];
+    // A releitura local nunca muda o DONO espacial da descrição. O preço global é a âncora
+    // geométrica do card; uma leitura local divergente serve apenas como evidência numérica.
+    // Isso evita que um OCR de 14,39/14,89 faça o texto do Iogurte migrar para outro preço.
+    const priceRef=anchorPrice;
+    const pricesForText=[];
+    [...(allPagePrices||[]),...localPrices].forEach((p)=>{
+      if(!pricesForText.includes(p))pricesForText.push(p);
+    });
+    if(!pricesForText.length)pricesForText.push(anchorPrice);
+    const fragments=buildTextFragments(pass.words||[],pricesForText,pageWidth);
+    let product=productForPrice(priceRef,fragments,pricesForText,pageWidth);
+    if(product){
+      product=expandProductDescription(product,priceRef,fragments,pricesForText,pageWidth);
+      product=completeOwnedProductDescription(product,priceRef,fragments,pricesForText,pageWidth);
+    }
+    const cueProduct=cueAnchoredLocalProduct(pass,priceRef,pricesForText,pageWidth);
+    const fallback=fallbackProductFromLocalPass(pass,priceRef,pageWidth);
+    const choices=[product,cueProduct,fallback].filter(Boolean);
+    if(!choices.length)return null;
+    const cueFirst=cueProduct&&PRODUCT_CUE_RE.test(fold(cueProduct.productName||'').split(/\s+/)[0]||'')&&descriptionCompletenessScore(cueProduct.productName)>=.68;
+    if(cueFirst&&CORE_PRODUCT_CUE_RE.test(cueProduct.productName))return cueProduct;
+    choices.forEach((candidate)=>{
+      const comp=descriptionCompletenessScore(candidate.productName);
+      const sem=productSemanticScore(candidate.productName,candidate.ocrConfidence);
+      const cue=PRODUCT_CUE_RE.test(candidate.productName)?1:0;
+      candidate._localChoiceScore=comp*1.35+sem+Number(candidate.ownershipConfidence||0)*.25+cue*.20;
+    });
+    choices.sort((a,b)=>b._localChoiceScore-a._localChoiceScore);
+    const best=choices[0];
+    delete best._localChoiceScore;
+    return best;
+  }
+
+  function needsSecondCardPass(product,price,localPrice) {
+    if(!product)return true;
+    if(Number(product.ocrConfidence||0)<76)return true;
+    if(descriptionCompletenessScore(product.productName)<.67)return true;
+    // Embalagem sozinha não prova que a descrição é completa ("500g" pode sobreviver ao OCR
+    // mesmo quando o nome desaparece). Sem um núcleo de produto reconhecido, buscamos outra leitura.
+    if(!PRODUCT_CUE_RE.test(product.productName))return true;
+    if(price?.conflicts?.length)return true;
+    if(localPrice!=null&&Math.abs(Number(localPrice)-Number(price.price))>.011)return true;
+    return false;
+  }
+
+  function matchRefinementForPrice(price,refinements,pageWidth) {
+    const pc=center(price.box);
+    let best=null;
+    (refinements||[]).forEach((card)=>{
+      (card.matches||[]).forEach((match)=>{
+        const dx=Number(match.anchorX||0)-pc.x,dy=Number(match.anchorY||0)-pc.y;
+        const dist=Math.hypot(dx,dy);
+        const valuePenalty=Math.abs(Number(match.originalPrice||0)-Number(price.price||0))<.011?0:42;
+        const score=dist+valuePenalty;
+        if(score<=Math.max(130,pageWidth*.07)&&(!best||score<best.score))best={...match,score,card};
+      });
+    });
+    return best;
+  }
+
+  async function refineOfferCards(worker,source,prices,pageWidth,pageHeight,{pageNumber=1,onProgress=null}={}) {
+    const groups=groupPricesIntoOfferCards(prices,pageWidth);
+    const refinements=[];
+    for(let index=0;index<groups.length;index+=1){
+      const group=groups[index],rect=deriveOfferCardRect(group,groups,pageWidth,pageHeight);
+      const crop=cropCanvas(source,rect.x0,rect.y0,rect.x1,rect.y1);
+      if(crop.canvas.width<80||crop.canvas.height<80){crop.canvas.width=crop.canvas.height=1;continue;}
+
+      const sparse=await recognizePass(worker,crop.canvas,{pass:`card-p${pageNumber}-${index+1}-sparse`,psm:'11',offsetX:crop.offsetX,offsetY:crop.offsetY});
+      const sparsePrices=collectPassPrices(sparse);
+      const matches=[];
+      let autoPass=null,blockPass=null;
+
+      // Primeiro avaliamos cada preço com a releitura local. PSM 3 costuma reconstruir melhor
+      // linhas quebradas em encartes; PSM 6 entra somente quando ainda há conflito/incompletude.
+      for(const anchor of group.prices){
+        const ac=center(anchor.box);
+        let localPriceEntry=[...sparsePrices].sort((a,b)=>{
+          const A=center(a.box),B=center(b.box);
+          return Math.hypot(A.x-ac.x,A.y-ac.y)-Math.hypot(B.x-ac.x,B.y-ac.y);
+        })[0]||null;
+        if(localPriceEntry&&Math.hypot(center(localPriceEntry.box).x-ac.x,center(localPriceEntry.box).y-ac.y)>Math.max(170,pageWidth*.08))localPriceEntry=null;
+
+        let product1=localProductFromPass(sparse,anchor,prices,pageWidth);
+        const localPrice1=localPriceEntry?.price??null;
+        const secondNeeded=needsSecondCardPass(product1,anchor,localPrice1);
+
+        if(secondNeeded&&!autoPass){
+          const prepared=preprocessCanvas(crop.canvas,'mild');
+          autoPass=await recognizePass(worker,prepared,{pass:`card-p${pageNumber}-${index+1}-auto`,psm:'3',offsetX:crop.offsetX,offsetY:crop.offsetY});
+          prepared.width=prepared.height=1;
+        }
+        const product2=autoPass?localProductFromPass(autoPass,anchor,prices,pageWidth):null;
+        const localAgreement12=product1&&product2?descriptionSimilarity(product1.productName,product2.productName):0;
+        const thirdNeeded=secondNeeded&&(
+          !product2||
+          needsSecondCardPass(product2,anchor,localPrice1)||
+          (product1&&product2&&localAgreement12<.54)
+        );
+        if(thirdNeeded&&!blockPass){
+          const prepared=preprocessCanvas(crop.canvas,'mild');
+          blockPass=await recognizePass(worker,prepared,{pass:`card-p${pageNumber}-${index+1}-block`,psm:'6',offsetX:crop.offsetX,offsetY:crop.offsetY});
+          prepared.width=prepared.height=1;
+        }
+        const product3=blockPass?localProductFromPass(blockPass,anchor,prices,pageWidth):null;
+        const consensusPass=consensusOcrPass([sparse,autoPass,blockPass].filter(Boolean),{pass:`card-p${pageNumber}-${index+1}-consensus`});
+        const productConsensus=localProductFromPass(consensusPass,anchor,prices,pageWidth);
+        const productVariants=[
+          product1&&{...product1,descriptionPass:'card-sparse'},
+          product2&&{...product2,descriptionPass:'card-auto'},
+          product3&&{...product3,descriptionPass:'card-block'},
+          productConsensus&&{...productConsensus,descriptionPass:'card-consensus',ocrConfidence:Math.max(Number(productConsensus.ocrConfidence||0),78)}
+        ].filter(Boolean);
+        const localProduct=chooseProductDescriptionVariant(productVariants);
+
+        // Preço: faz uma leitura numérica dedicada no entorno do preço. Se ela discordar,
+        // uma segunda segmentação de linha é usada para formar consenso antes de substituir.
+        const micro=priceMicroRect(anchor,rect,pageWidth,pageHeight);
+        const priceCrop=cropCanvas(source,micro.x0,micro.y0,micro.x1,micro.y1);
+        let pricePass1=null,pricePass2=null,p1=null,p2=null;
+        if(priceCrop.canvas.width>=35&&priceCrop.canvas.height>=24){
+          pricePass1=await recognizePricePass(worker,priceCrop.canvas,{pass:`card-p${pageNumber}-${index+1}-price7`,psm:'7',offsetX:priceCrop.offsetX,offsetY:priceCrop.offsetY});
+          p1=dedicatedPriceValue(pricePass1.raw);
+          const disagreement=p1!=null&&Math.abs(p1-Number(anchor.price))>.011;
+          const suspicious=Number(anchor.price)>=100||anchor.conflicts?.length||!anchor.explicitCurrency;
+          if(disagreement||suspicious||p1==null){
+            pricePass2=await recognizePricePass(worker,priceCrop.canvas,{pass:`card-p${pageNumber}-${index+1}-price13`,psm:'13',offsetX:priceCrop.offsetX,offsetY:priceCrop.offsetY});
+            p2=dedicatedPriceValue(pricePass2.raw);
+          }
+        }
+        priceCrop.canvas.width=priceCrop.canvas.height=1;
+
+        const localCardPrice=localPrice1;
+        const votes=[
+          p1!=null?{value:p1,source:'price-psm7',weight:3}:null,
+          p2!=null?{value:p2,source:'price-psm13',weight:3}:null,
+          localCardPrice!=null?{value:Number(localCardPrice),source:'card-text',weight:2}:null,
+          {value:Number(anchor.price),source:'global',weight:Math.max(1,Math.min(3,Number(anchor.passCount||1)))}
+        ].filter(Boolean);
+        const buckets=[];
+        votes.forEach((vote)=>{
+          let bucket=buckets.find((b)=>Math.abs(b.value-vote.value)<.011);
+          if(!bucket){bucket={value:vote.value,weight:0,sources:[]};buckets.push(bucket);}
+          bucket.weight+=vote.weight;bucket.sources.push(vote.source);
+        });
+        buckets.sort((a,b)=>b.weight-a.weight||a.value-b.value);
+        const bestBucket=buckets[0],runner=buckets[1];
+        const priceConfirmed=Boolean(bestBucket&&(bestBucket.weight>=5||bestBucket.sources.length>=2)
+          &&(!runner||bestBucket.weight-runner.weight>=2||Math.abs(bestBucket.value-Number(anchor.price))<.011));
+        const refinedPrice=priceConfirmed?Number(bestBucket.value.toFixed(2)):Number(anchor.price);
+
+        const localCue=Boolean(localProduct&&PRODUCT_CUE_RE.test(localProduct.productName));
+        const localAgreement=Number(localProduct?.descriptionAgreement||0);
+        const localVariants=Number(localProduct?.descriptionVariantCount||0);
+        const localName=polishProductText(localProduct?.productName||'');
+        const localStartsWithCue=Boolean(localName&&PRODUCT_CUE_RE.test(localName.split(/\s+/)[0]||''));
+        const localOcr=Number(localProduct?.ocrConfidence||0);
+        const localNoise=descriptionNoisePenalty(localName);
+        const evidenceStrong=localOcr>=76||(localVariants>=2&&localAgreement>=.68&&descriptionCompletenessScore(localName)>=.80);
+        const productConfirmed=Boolean(localProduct
+          && descriptionCompletenessScore(localName)>=.68
+          && productSemanticScore(localName,localProduct.ocrConfidence)>=.62
+          && localCue
+          && localStartsWithCue
+          && localNoise<=.12
+          && evidenceStrong
+          && !/^(?:FEM|IO|NS|TO|ER|FE|EM)\b/i.test(localName));
+
+        matches.push({
+          anchorX:ac.x,anchorY:ac.y,originalPrice:Number(anchor.price),
+          refinedPrice,priceConfirmed,priceVotes:votes,
+          productName:localProduct?.productName||'',
+          productConfirmed,
+          product:localProduct||null,
+          descriptionAgreement:Number(localProduct?.descriptionAgreement||0),
+          descriptionCompleteness:Number(localProduct?.completeness??(localProduct?descriptionCompletenessScore(localProduct.productName):0)),
+          localText:cleanText([consensusPass?.text||'',sparse.text,autoPass?.text||'',blockPass?.text||''].filter(Boolean).join(' | ')),
+          priceReadings:[pricePass1?.raw||'',pricePass2?.raw||''].filter(Boolean)
+        });
+      }
+
+      refinements.push({
+        id:group.id,pageNumber,rect,
+        text:cleanText([sparse.text,autoPass?.text||'',blockPass?.text||''].filter(Boolean).join(' | ')),
+        passes:[sparse.pass,autoPass?.pass,blockPass?.pass,'card-consensus'].filter(Boolean),
+        matches
+      });
+      crop.canvas.width=crop.canvas.height=1;
+      if(onProgress)onProgress({done:index+1,total:groups.length});
+    }
+    return refinements;
   }
 
   async function analyzeImagePdf(file,options,onProgress) {
@@ -1384,20 +2074,50 @@
           preliminary=mergePricePasses(passes.map((entry)=>collectPassPrices(entry)));
         }
 
+        // RELEITURA LOCAL POR CARD
+        // O OCR global localiza preços e estrutura. Antes de gerar qualquer promoção, cada região
+        // comercial é recortada e relida isoladamente. Isso impede que palavras de dois cards
+        // vizinhos sejam concatenadas (ex.: queijo + margarina) e permite uma releitura numérica
+        // dedicada para corrigir preços visualmente estilizados.
+        progressBase=.986;progressWeight=.010;
+        const cardRefinements=await refineOfferCards(
+          worker,source,preliminary,mild.width,mild.height,
+          {pageNumber,onProgress:({done,total})=>{
+            if(onProgress)onProgress({
+              pageNumber,numPages:pdf.numPages,
+              percent:Math.round(clamp(((pageNumber-1)+(0.965+0.03*(done/Math.max(1,total))))/pdf.numPages*100,0,99)),
+              mode:'ocr-card-reread'
+            });
+          }}
+        );
+
+        // Rodapé dedicado: validade costuma estar em corpo muito menor que os preços. A releitura
+        // não entra no parser de produtos; serve exclusivamente ao conhecimento documental.
+        let footerText='';
+        const footerY=Math.max(0,Math.floor(source.height*.70));
+        const footerCrop=cropCanvas(source,0,footerY,source.width,source.height);
+        if(footerCrop.canvas.width>120&&footerCrop.canvas.height>55){
+          const footerPrepared=preprocessCanvas(footerCrop.canvas,'mild');
+          const footerPass=await recognizePass(worker,footerPrepared,{pass:`footer-p${pageNumber}`,psm:'6',offsetX:footerCrop.offsetX,offsetY:footerCrop.offsetY});
+          footerText=footerPass.text||'';
+          footerPrepared.width=footerPrepared.height=1;
+        }
+        footerCrop.canvas.width=footerCrop.canvas.height=1;
+
         const textPasses=passes.filter((p)=>p.pass!=='color');
         const words=mergeOcrWords(textPasses.map((p)=>p.words));
         const lines=segmentRows(words);
-        // Validade e condições usam apenas passagens textuais; a máscara cromática serve só ao preço.
-        const pageText=cleanText([...new Set(textPasses.map((p)=>p.text).filter(Boolean))].join(' '));
+        // Validade e condições combinam OCR principal + rodapé dedicado.
+        const pageText=cleanText([...new Set([...textPasses.map((p)=>p.text).filter(Boolean),footerText].filter(Boolean))].join(' '));
         documentTexts.push(pageText);
-        pages.push({pageNumber,pageWidth:baseViewport.width,pageHeight:baseViewport.height,canvasWidth:mild.width,canvasHeight:mild.height,renderScale,words,lines,text:pageText,passLines:passes.map((p)=>({pass:p.pass,words:p.words,lines:p.lines,medianWordHeight:p.medianWordHeight})),priceCoverageCount:preliminary.length,expectedPriceFloor:expectedFloor,coveragePasses});
+        pages.push({pageNumber,pageWidth:baseViewport.width,pageHeight:baseViewport.height,canvasWidth:mild.width,canvasHeight:mild.height,renderScale,words,lines,text:pageText,footerText,passLines:passes.map((p)=>({pass:p.pass,words:p.words,lines:p.lines,medianWordHeight:p.medianWordHeight})),priceCoverageCount:preliminary.length,expectedPriceFloor:expectedFloor,coveragePasses,cardRefinements});
         source.width=source.height=1;mild.width=mild.height=1;strong.width=strong.height=1;saturation.width=saturation.height=1;
       }
 
       const documentText=documentTexts.join(' '),validity=enrichValidity(documentText,file.name);
       const candidates=pages.flatMap((page)=>buildOcrCandidates(page,validity,options));
       if(onProgress)onProgress({pageNumber:pdf.numPages,numPages:pdf.numPages,percent:100,mode:'ocr'});
-      return {validity,candidates,documentText,numPages:pdf.numPages,pages,ocrPages:pages.map((p)=>({pageNumber:p.pageNumber,words:p.words.length,lines:p.lines.length,passes:p.passLines.length,pricesDetected:p.priceCoverageCount,expectedFloor:p.expectedPriceFloor,coveragePasses:p.coveragePasses}))};
+      return {validity,candidates,documentText,numPages:pdf.numPages,pages,ocrPages:pages.map((p)=>({pageNumber:p.pageNumber,words:p.words.length,lines:p.lines.length,passes:p.passLines.length,pricesDetected:p.priceCoverageCount,expectedFloor:p.expectedPriceFloor,coveragePasses:p.coveragePasses,cardsReread:p.cardRefinements?.length||0}))};
     }finally{await worker.terminate().catch(()=>{});}
   }
 
