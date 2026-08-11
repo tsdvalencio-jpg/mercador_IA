@@ -574,7 +574,8 @@
     ocr_price_scale_suspicious: 'tamanho visual do valor não parece preço de oferta',
     ocr_price_conflict: 'leituras OCR discordaram sobre o preço nesta região',
     ocr_low_description_quality: 'descrição visual não tem qualidade suficiente para publicação',
-    ocr_block_ownership_weak: 'bloco de produto não pertence com segurança a este preço'
+    ocr_block_ownership_weak: 'bloco de produto não pertence com segurança a este preço',
+    knowledge_legacy_description_conflict: 'JSON de conhecimento e validador independente discordaram sobre o produto'
   };
 
   function automationThreshold() {
@@ -588,7 +589,7 @@
     if (candidate.verified && candidate.verificationMode === 'manual') return 'manual';
     const risks = new Set(candidate.riskFlags || []);
     candidate.riskFlags = [...risks];
-    const hardBlock = ['association_disagreement','missing_validity','too_many_prices','ambiguous_price_kind','invalid_price','invalid_previous_price','header_contamination','price_inside_product_text','price_cluster_disagreement','ocr_price_without_currency','ocr_low_price_confidence','ocr_validity_inferred','ocr_price_scale_suspicious','ocr_price_conflict','ocr_low_description_quality','ocr_block_ownership_weak']
+    const hardBlock = ['association_disagreement','missing_validity','too_many_prices','ambiguous_price_kind','invalid_price','invalid_previous_price','header_contamination','price_inside_product_text','price_cluster_disagreement','ocr_price_without_currency','ocr_low_price_confidence','ocr_validity_inferred','ocr_price_scale_suspicious','ocr_price_conflict','ocr_low_description_quality','ocr_block_ownership_weak','knowledge_legacy_description_conflict']
       .some((x) => risks.has(x));
     const confidence = Number(candidate.confidence || 0);
     const structuralFloor = threshold >= .99 ? .94 : (threshold >= .98 ? .92 : .90);
@@ -645,7 +646,9 @@
       ? `${M.formatDateOnly(validity.startAt)} a ${M.formatDateOnly(validity.endAt)}`
       : 'validade não confirmada automaticamente';
     const thresholdPct = Math.round((imp.threshold || .98) * 100);
-    byId('pdfImportMeta').innerHTML = `<div class="pdf-automation-summary">Arquivo: <strong>${M.escapeHtml(imp.result.fileName)}</strong> · ${imp.result.numPages} página${imp.result.numPages === 1 ? '' : 's'} · ${M.escapeHtml(validityText)} · SHA-256 ${M.escapeHtml((imp.result.hash || '').slice(0,16))}…<br><strong>${autoPending}</strong> automáticos prontos · <strong>${manualReady}</strong> revisados prontos · <strong>${reviewPending}</strong> pendentes de revisão · <strong>${ignored}</strong> excluídos desta importação · limite automático <strong>${thresholdPct}%</strong> · motor ${M.escapeHtml(imp.result.engineVersion || '2.2.0')} / PDF.js ${M.escapeHtml(imp.result.pdfjsVersion || '')}${imp.result.extractionMode === 'ocr-image-fallback' ? ' · <strong>OCR visual</strong>' : ''}</div>`;
+    const km = imp.result.knowledgeMetrics || null;
+    const knowledgeInfo = km ? `<br><strong>Arquivo de conhecimento:</strong> ${M.escapeHtml(imp.result.knowledgeSchemaVersion || 'mercador.encarte.knowledge.v1')} · ${km.words || 0} palavras · ${km.lines || 0} linhas · ${km.prices || 0} fatos de preço · modos ${M.escapeHtml((km.modes || []).join(' + ') || '—')}` : '';
+    byId('pdfImportMeta').innerHTML = `<div class="pdf-automation-summary">Arquivo: <strong>${M.escapeHtml(imp.result.fileName)}</strong> · ${imp.result.numPages} página${imp.result.numPages === 1 ? '' : 's'} · ${M.escapeHtml(validityText)} · SHA-256 ${M.escapeHtml((imp.result.hash || '').slice(0,16))}…<br><strong>${autoPending}</strong> automáticos prontos · <strong>${manualReady}</strong> revisados prontos · <strong>${reviewPending}</strong> pendentes de revisão · <strong>${ignored}</strong> excluídos desta importação · limite automático <strong>${thresholdPct}%</strong> · motor ${M.escapeHtml(imp.result.engineVersion || '2.2.0')} / PDF.js ${M.escapeHtml(imp.result.pdfjsVersion || '')} · <strong>JSON de conhecimento</strong>${knowledgeInfo}</div>`;
 
     const q = M.normalizeText(byId('pdfCandidateSearch')?.value || '');
     const filter = byId('pdfCandidateFilter')?.value || 'all';
@@ -715,6 +718,27 @@
       discardBtn.disabled = reviewPending === 0;
       discardBtn.textContent = reviewPending ? `Excluir ${reviewPending} pendente${reviewPending === 1 ? '' : 's'}` : 'Excluir pendentes de revisão';
     }
+    const knowledgeBtn = byId('pdfDownloadKnowledgeBtn');
+    if (knowledgeBtn) {
+      knowledgeBtn.disabled = !imp.result?.knowledgeDocument;
+      knowledgeBtn.title = imp.result?.knowledgeDocument ? 'Baixar o documento JSON usado como fonte de conhecimento da extração' : 'O JSON aparece depois da análise do encarte';
+    }
+  }
+
+  function downloadPdfKnowledge() {
+    const imp = getPdfImport();
+    const knowledge = imp?.result?.knowledgeDocument;
+    if (!knowledge) { M.toast('Analise um encarte antes de baixar o JSON de conhecimento.', 'warning'); return; }
+    try {
+      if (window.MercadorPDFImporter?.downloadKnowledgeJson) window.MercadorPDFImporter.downloadKnowledgeJson(knowledge, imp.result.fileName || 'encarte');
+      else {
+        const blob = new Blob([JSON.stringify(knowledge, null, 2)], { type:'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob), a = document.createElement('a');
+        a.href = url; a.download = `${String(imp.result.fileName || 'encarte').replace(/\.pdf$/i,'').replace(/[^a-z0-9._-]+/gi,'_')}.mercador-knowledge.json`;
+        document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+      M.toast('JSON de conhecimento gerado a partir do encarte analisado.', 'success', 5000);
+    } catch(error) { console.error(error); M.toast(error.message || 'Não foi possível gerar o JSON de conhecimento.', 'error', 7000); }
   }
 
   async function analyzePdfImport(event) {
@@ -757,7 +781,7 @@
       const reviewCount = state.pdfImport.candidates.filter((x) => x.automationDecision !== 'auto').length;
       setPdfProgress(100, `${result.candidates.length} ofertas detectadas: ${autoCount} seguras para automação e ${reviewCount} exceções.`);
       renderPdfImport();
-      await audit('pdf_import_analyzed_v2', 'pdf_import', (result.hash || '').slice(0,20), { fileName:result.fileName, pages:result.numPages, candidates:result.candidates.length, auto:autoCount, review:reviewCount, threshold, marketId, unitId, engineVersion:result.engineVersion });
+      await audit('pdf_import_analyzed_v2', 'pdf_import', (result.hash || '').slice(0,20), { fileName:result.fileName, pages:result.numPages, candidates:result.candidates.length, auto:autoCount, review:reviewCount, threshold, marketId, unitId, engineVersion:result.engineVersion, knowledgeSchemaVersion:result.knowledgeSchemaVersion || '', knowledgeMetrics:result.knowledgeMetrics || null });
       if (!result.candidates.length) {
         M.toast('O PDF foi lido, mas nenhum bloco de produto/preço foi associado com segurança.', 'warning', 8000);
       } else if (byId('pdfAutoPublish')?.checked && autoCount) {
@@ -1269,6 +1293,7 @@
     byId('pdfPublishVerifiedBtn').addEventListener('click', publishVerifiedPdfCandidates);
     byId('pdfPublishAutoBtn').addEventListener('click', () => publishAutomaticPdfCandidates(false));
     byId('pdfDiscardPendingBtn').addEventListener('click', discardAllPendingPdfCandidates);
+    byId('pdfDownloadKnowledgeBtn')?.addEventListener('click', downloadPdfKnowledge);
     byId('pdfAutomationMode').addEventListener('change', () => { if (state.pdfImport) { state.pdfImport.threshold = automationThreshold(); refreshPdfClassifications(); renderPdfImport(); } });
     byId('pdfIgnoreCandidateBtn').addEventListener('click', ignorePdfCandidate);
     byId('pdfCandidateSearch').addEventListener('input', renderPdfImport);

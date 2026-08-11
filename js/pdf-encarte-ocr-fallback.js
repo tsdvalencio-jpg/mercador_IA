@@ -1,15 +1,17 @@
 (function () {
   'use strict';
 
-  // Camada complementar: o motor PDF nativo continua sendo a primeira opção.
-  // Este arquivo só assume quando o PDF não possui uma camada de texto útil.
+  // Motor universal de conhecimento: preserva o importador anterior como validador,
+  // mas transforma primeiro o PDF em um JSON canônico (texto nativo, OCR ou híbrido)
+  // e extrai as promoções desse documento estruturado.
   const base = window.MercadorPDFImporter;
   if (!base || typeof base.analyzeFile !== 'function') {
     console.error('[Mercador IA] Importador PDF base não encontrado; fallback OCR não foi instalado.');
     return;
   }
 
-  const OCR_ENGINE_VERSION = '2.5.0-ocr';
+  const OCR_ENGINE_VERSION = '3.0.0-knowledge';
+  const KNOWLEDGE_SCHEMA_VERSION = 'mercador.encarte.knowledge.v1';
   const TESSERACT_VERSION = '5.1.1';
   const PDFJS_VERSION = base.PDFJS_VERSION || '5.7.284';
   const PDFJS_BASE = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}`;
@@ -445,7 +447,7 @@
     return '';
   }
 
-  const PRODUCT_CUE_RE=/\b(?:ABOBORA|ABÓBORA|BATATA|CEBOLA|TOMATE|CENOURA|BANANA|MACA|MAÇÃ|UVA|ALFACE|BROCOLIS|BRÓCOLIS|MANDIOCA|ACEL(?:GA)?|OVOS?|FRANGO|BOVIN|SUIN|SUÍN|CARNE|COSTELA|PALETA|FILE|FILÉ|COXA|SOBRECOXA|PEITO|PERNIL|PANCETA|LINGUICA|LINGUIÇA|PRESUNTO|QUEIJO|MUSSARELA|MARGARINA|REQUEIJAO|REQUEIJÃO|IOGURTE|BEBIDA|LEITE|PAO|PÃO|SALGADINHO|CAROLINA|EMPANADO|NUGGET|SALSICHA|RAVIOLI|ARROZ|FEIJAO|FEIJÃO|CAFE|CAFÉ|ACUCAR|AÇÚCAR|OLEO|ÓLEO|MASSA|MACARR|BISCO|CHOC|REFRIG|CERVEJA|AGUA|ÁGUA|SABAO|SABÃO|DETERG|AMAC|PAPEL|SHAMPOO|SABONETE|FRALDA|DESOD|CARVAO|CARVÃO|AZEITE|FARINHA|MOLHO|MAIONESE|ATUM|MILHO)\b/i;
+  const PRODUCT_CUE_RE=/\b(?:ABACATE|ABACAXI|ABOBORA|ABÓBORA|ABOBRINHA|ACELGA|ALHO|ALMEIRAO|ALMEIRÃO|ALFACE|BANANA|BATATA|BERINJELA|BETERRABA|BROCOLIS|BRÓCOLIS|CEBOLA|CENOURA|CHUCHU|COUVE|LARANJA|LIMAO|LIMÃO|MACA|MAÇÃ|MAMAO|MAMÃO|MANDIOCA|MANGA|MELANCIA|MELAO|MELÃO|MORANGO|MOURGOT|OVOS?|PEPINO|PERA|PIMENTAO|PIMENTÃO|REPOLHO|TANGERINA|TOMATE|UVA|VAGEM|FRANGO|BOVIN|SUIN|SUÍN|CARNE|COSTELA|PALETA|FILE|FILÉ|COXA|SOBRECOXA|PEITO|PERNIL|PANCETA|LINGUICA|LINGUIÇA|PRESUNTO|QUEIJO|MUSSARELA|MARGARINA|MANTEIGA|REQUEIJAO|REQUEIJÃO|IOGURTE|BEBIDA|LEITE|PAO|PÃO|BOLO|BROA|ROSCA|TORTA|SONHO|SALGADINHO|CAROLINA|EMPANADO|NUGGET|STEAK|SALSICHA|RAVIOLI|ARROZ|FEIJAO|FEIJÃO|CAFE|CAFÉ|ACUCAR|AÇÚCAR|OLEO|ÓLEO|MASSA|MACARR|BISCO|CHOC|REFRIG|CERVEJA|AGUA|ÁGUA|SABAO|SABÃO|DETERG|AMAC|PAPEL|SHAMPOO|SABONETE|FRALDA|DESOD|CARVAO|CARVÃO|AZEITE|FARINHA|MOLHO|MAIONESE|ATUM|MILHO)\b/i;
 
   function polishProductText(text) {
     let clean=sanitizeProductText(text);
@@ -499,6 +501,163 @@
     if(ocrConfidence>=85)score+=.05;else if(ocrConfidence<58)score-=.12;
     if(/[»«]{1,}|['"`´]{2,}|\b[A-ZÀ-Ü]\s+[A-ZÀ-Ü]\s+[A-ZÀ-Ü]\b/.test(clean))score-=.10;
     return clamp(score,0,1);
+  }
+
+
+  // A descrição comercial precisa ser completa, não apenas "um texto perto do preço".
+  // Esta nota diferencia um nome utilizável (ex.: "Queijo Mussarela Fatiado ... 160g")
+  // de um fragmento plausível porém incompleto (ex.: "Fatiado Seara").
+  function descriptionCompletenessScore(text) {
+    const clean=polishProductText(text);
+    if(!clean||isInstitutionalText(clean))return 0;
+    const tokens=clean.split(/\s+/).filter(Boolean);
+    const cue=PRODUCT_CUE_RE.test(clean);
+    const pack=Boolean(extractPackage(clean));
+    const folded=fold(clean);
+    let score=.28;
+    if(tokens.length>=3&&tokens.length<=12)score+=.16;else if(tokens.length===2)score+=.04;else if(tokens.length>15)score-=.20;
+    if(cue)score+=.30;
+    if(pack)score+=.18;
+    if(/\b(?:KG|G|GR|ML|L|LT|LTS|UN|UND|PACOTE|PCT|BANDEJA|BDJ|POTE|LATA|PET|GARRAFA|PECA|PEÇA)\b/i.test(clean))score+=.06;
+    if(/^(?:FATIAD[OA]|TRADICIONAL|SABORES?|PACOTE|BANDEJA|CONGELAD[OA]|RESFRIAD[OA]|SEM|COM|LIGHT|ZERO|TIPOS?)\b/.test(folded)&&!cue)score-=.30;
+    if(!cue&&!pack&&tokens.length<=3)score-=.24;
+    if(/[»«]{1,}|['"`´]{2,}/.test(clean))score-=.12;
+    return clamp(score,0,1);
+  }
+
+  function descriptionTokenSet(value) {
+    return new Set(fold(value).replace(/[^A-Z0-9]+/g,' ').split(' ').filter((x)=>x.length>1));
+  }
+
+  function descriptionSimilarity(a,b) {
+    const A=descriptionTokenSet(a),B=descriptionTokenSet(b);
+    if(!A.size||!B.size)return 0;
+    const common=[...A].filter((x)=>B.has(x)).length;
+    return common/Math.max(A.size,B.size);
+  }
+
+  function descriptionContains(longer,shorter) {
+    const A=descriptionTokenSet(longer),B=descriptionTokenSet(shorter);
+    if(!A.size||!B.size||A.size<B.size)return false;
+    const common=[...B].filter((x)=>A.has(x)).length;
+    return common/Math.max(1,B.size)>=.88;
+  }
+
+  // Expande a descrição escolhida para linhas imediatamente acima/abaixo que pertençam ao
+  // mesmo corredor visual. A expansão é conservadora: ela só entra quando aumenta a
+  // completude sem degradar a semântica e sem atravessar claramente para o preço vizinho.
+  function expandProductDescription(product,price,fragments,prices,pageWidth) {
+    if(!product?.selectedFragments?.length)return product;
+    const selected=[...product.selectedFragments].sort((a,b)=>a.fragment.box.y0-b.fragment.box.y0||a.fragment.box.x0-b.fragment.box.x0);
+    const selectedSet=new Set(selected.map((x)=>x.fragment));
+    const baseBox=unionBoxes(selected.map((x)=>x.fragment.box));
+    if(!baseBox)return product;
+    const pc=center(price.box);
+    const corridorPad=Math.max(36,Math.min(105,pageWidth*.038));
+    const candidates=(fragments||[]).filter((fragment)=>!selectedSet.has(fragment)).map((fragment)=>{
+      const ownership=ownershipForFragment(price,fragment,prices,pageWidth);
+      const semantic=productSemanticScore(fragment.text,fragment.confidence);
+      return {fragment,ownership,semantic};
+    }).filter((x)=>{
+      if(x.semantic<.20||isInstitutionalText(x.fragment.text))return false;
+      const box=x.fragment.box,fc=center(box);
+      const horizontal=overlap1d(box.x0,box.x1,baseBox.x0-corridorPad,baseBox.x1+corridorPad);
+      const centerDiff=Math.abs(fc.x-center(baseBox).x);
+      const aboveGap=baseBox.y0-box.y1,belowGap=box.y0-baseBox.y1;
+      const nearVertical=(aboveGap>=0&&aboveGap<=78)||(belowGap>=0&&belowGap<=56);
+      if(!nearVertical)return false;
+      if(horizontal<=0&&centerDiff>Math.max(88,pageWidth*.052))return false;
+      if(x.ownership.own>=99999)return false;
+      // Se outro preço é claramente dono deste fragmento, não atravessamos o card.
+      if(Number.isFinite(x.ownership.other)&&x.ownership.own>x.ownership.other+16)return false;
+      // Linhas muito abaixo do preço normalmente já pertencem ao próximo card.
+      if(box.y0>price.box.y1+42)return false;
+      return true;
+    });
+
+    let best={...product,completeness:descriptionCompletenessScore(product.productName)};
+    const trySubset=(subset)=>{
+      const ordered=[...subset].sort((a,b)=>a.fragment.box.y0-b.fragment.box.y0||a.fragment.box.x0-b.fragment.box.x0);
+      const text=polishProductText(ordered.map((x)=>x.fragment.text).join(' '));
+      if(!text||isInstitutionalText(text))return;
+      const words=text.split(/\s+/).filter(Boolean).length;
+      if(words>17)return;
+      for(let k=1;k<ordered.length;k+=1){if(ordered[k].fragment.box.y0-ordered[k-1].fragment.box.y1>84)return;}
+      const box=unionBoxes(ordered.map((x)=>x.fragment.box));
+      const ocrConfidence=ordered.reduce((s,x)=>s+Number(x.fragment.confidence||0),0)/ordered.length;
+      const semantic=productSemanticScore(text,ocrConfidence);
+      const completeness=descriptionCompletenessScore(text);
+      const ownershipConfidence=ordered.reduce((s,x)=>s+Number(x.ownership?.confidence ?? .55),0)/ordered.length;
+      const horizontal=rangeDistance(pc.x,box.x0-10,box.x1+10);
+      const vertical=box.y1<=price.box.y0?price.box.y0-box.y1:Math.abs(center(box).y-pc.y)*1.1;
+      const spatial=clamp(1-horizontal/Math.max(140,pageWidth*.10)-vertical/Math.max(260,pageWidth*.19)*.62,0,1);
+      // Para substituir a versão anterior, a expansão precisa ser mais completa e manter
+      // semântica/posição em patamar profissional.
+      const improvement=completeness-(best.completeness||0);
+      const score=completeness*120+semantic*100+spatial*45+ownershipConfidence*35+ocrConfidence*.12+Math.min(words,11)*2;
+      const bestScore=(best.completeness||0)*120+Number(best.semantic||0)*100+Number(best.spatial||0)*45+Number(best.ownershipConfidence||0)*35+Number(best.ocrConfidence||0)*.12+Math.min((best.productName||'').split(/\s+/).length,11)*2;
+      if(semantic>=Math.max(.48,Number(best.semantic||0)-.055)&&completeness>=.55&&(improvement>=.045||score>bestScore+7)){
+        best={...best,productName:text,productBox:box,ocrConfidence,semantic,ownershipConfidence,spatial,selectedFragments:ordered,completeness};
+      }
+    };
+
+    candidates.forEach((candidate)=>trySubset([...selected,candidate]));
+    // Também tenta duas linhas adicionais quando são contíguas e do mesmo corredor.
+    for(let i=0;i<candidates.length;i+=1){
+      for(let j=i+1;j<candidates.length;j+=1){
+        const a=candidates[i].fragment.box,b=candidates[j].fragment.box;
+        if(Math.abs(center(a).x-center(b).x)>Math.max(110,pageWidth*.06))continue;
+        if(Math.abs(a.y0-b.y0)>150)continue;
+        trySubset([...selected,candidates[i],candidates[j]]);
+      }
+    }
+    return best;
+  }
+
+  // Escolhe a melhor descrição entre as leituras independentes (página inteira, densa,
+  // faixas verticais/horizontais). Uma leitura longa e coerente vence um fragmento curto;
+  // leituras conflitantes são explicitamente marcadas para revisão.
+  function chooseProductDescriptionVariant(variants) {
+    const prepared=(variants||[]).filter(Boolean).map((variant)=>{
+      const productName=polishProductText(variant.productName||'');
+      const semantic=productSemanticScore(productName,variant.ocrConfidence||0);
+      const completeness=descriptionCompletenessScore(productName);
+      return {...variant,productName,semantic,completeness};
+    }).filter((v)=>v.productName&&v.semantic>=.42&&v.completeness>=.35&&!isInstitutionalText(v.productName));
+    if(!prepared.length)return null;
+
+    // Remove duplicatas textuais mantendo a leitura mais forte.
+    const unique=[];
+    prepared.sort((a,b)=>b.completeness-a.completeness||b.semantic-a.semantic||b.ocrConfidence-a.ocrConfidence).forEach((v)=>{
+      const existing=unique.find((x)=>descriptionSimilarity(x.productName,v.productName)>=.94);
+      if(!existing)unique.push(v);
+    });
+
+    unique.forEach((v)=>{
+      let agreement=unique.length===1?1:0,support=0,containmentBonus=0;
+      unique.forEach((o)=>{
+        if(o===v)return;
+        const sim=descriptionSimilarity(v.productName,o.productName);
+        agreement=Math.max(agreement,sim);
+        if(sim>=.64)support+=1;
+        if(descriptionContains(v.productName,o.productName)&&v.productName.split(/\s+/).length>o.productName.split(/\s+/).length)containmentBonus+=10;
+      });
+      const words=v.productName.split(/\s+/).filter(Boolean).length;
+      const partialPenalty=unique.some((o)=>o!==v&&descriptionContains(o.productName,v.productName)&&o.completeness>=v.completeness-.04&&o.productName.split(/\s+/).length>=words+2)?18:0;
+      v.descriptionAgreement=agreement;
+      v.variantSupport=support;
+      v.variantScore=v.completeness*150+v.semantic*115+Number(v.spatial||0)*52+Number(v.ownershipConfidence||0)*42+Number(v.ocrConfidence||0)*.16+support*16+containmentBonus+Math.min(words,12)*2-partialPenalty;
+    });
+    unique.sort((a,b)=>b.variantScore-a.variantScore||b.completeness-a.completeness);
+    const best=unique[0],runner=unique[1];
+    let conflict=false;
+    if(runner&&best.completeness>=.58&&runner.completeness>=.58){
+      const sim=descriptionSimilarity(best.productName,runner.productName);
+      const contained=descriptionContains(best.productName,runner.productName)||descriptionContains(runner.productName,best.productName);
+      conflict=sim<.32&&!contained&&Math.abs(best.variantScore-runner.variantScore)<32;
+    }
+    const fidelity=clamp(best.completeness*.47+best.semantic*.30+Number(best.spatial||0)*.13+Number(best.descriptionAgreement||0)*.10,0,1);
+    return {...best,descriptionConflict:conflict,descriptionFidelity:fidelity,descriptionVariantCount:unique.length};
   }
 
   function buildTextFragments(words, prices) {
@@ -651,6 +810,13 @@
     else if(product.semantic>=.62){score+=.07;evidence.push('descrição de produto consistente');}
     else if(product.semantic<.48){risks.push('ocr_low_description_quality');score-=.10;}
 
+    const completeness=Number(product.completeness ?? descriptionCompletenessScore(product.productName));
+    if(completeness>=.82){score+=.065;evidence.push('descrição comercial completa reconstruída por OCR');}
+    else if(completeness>=.66){score+=.03;evidence.push('descrição comercial com boa completude');}
+    else {risks.push('ocr_incomplete_description');score-=.09;}
+    if(Number(product.descriptionVariantCount||0)>=2&&Number(product.descriptionAgreement||0)>=.66){score+=.045;evidence.push('descrição confirmada em leituras independentes');}
+    if(product.descriptionConflict){risks.push('ocr_description_conflict');score-=.10;}
+
     if(product.spatial>=.82){score+=.075;evidence.push('produto e preço no mesmo bloco visual');}
     else if(product.spatial>=.66){score+=.035;evidence.push('associação espacial visual compatível');}
     else risks.push('association_disagreement');
@@ -665,11 +831,12 @@
     else if(validity?.startAt&&validity?.endAt&&validity.inferred){score+=.01;evidence.push('validade inferida pelo nome do arquivo');risks.push('ocr_validity_inferred');}
     else risks.push('missing_validity');
 
-    const hard=new Set(['association_disagreement','missing_validity','ocr_low_price_confidence','ocr_price_conflict','ocr_price_scale_suspicious','ocr_low_description_quality']);
+    const hard=new Set(['association_disagreement','missing_validity','ocr_low_price_confidence','ocr_price_conflict','ocr_price_scale_suspicious','ocr_low_description_quality','ocr_incomplete_description','ocr_description_conflict']);
     if(risks.some((r)=>hard.has(r)))score=Math.min(score,.91);
     const confidence=clamp(score,.42,.995);
-    const structuralSafe=!risks.some((r)=>hard.has(r))&&Boolean(validity?.startAt&&validity?.endAt)&&!validity?.inferred&&price.explicitCurrency&&product.semantic>=.62&&product.spatial>=.68&&product.ownershipConfidence>=.50&&product.ocrConfidence>=68&&price.confidence>=72;
-    const automationSafe=structuralSafe&&product.semantic>=.74&&product.spatial>=.78&&product.ownershipConfidence>=.64&&product.ocrConfidence>=72&&price.confidence>=78&&(price.passCount>=2||price.scale>=1.28)&&confidence>=.97;
+    const agreementOk=Number(product.descriptionVariantCount||0)<2||Number(product.descriptionAgreement||0)>=.46;
+    const structuralSafe=!risks.some((r)=>hard.has(r))&&Boolean(validity?.startAt&&validity?.endAt)&&!validity?.inferred&&price.explicitCurrency&&product.semantic>=.62&&completeness>=.66&&agreementOk&&!product.descriptionConflict&&product.spatial>=.68&&product.ownershipConfidence>=.50&&product.ocrConfidence>=68&&price.confidence>=72;
+    const automationSafe=structuralSafe&&product.semantic>=.74&&completeness>=.78&&(Number(product.descriptionVariantCount||0)<2||Number(product.descriptionAgreement||0)>=.60)&&product.spatial>=.78&&product.ownershipConfidence>=.64&&product.ocrConfidence>=72&&price.confidence>=78&&(price.passCount>=2||price.scale>=1.28)&&confidence>=.97;
     return {confidence,risks:[...new Set(risks)],evidence:[...new Set(evidence)],structuralSafe,automationSafe};
   }
 
@@ -681,13 +848,40 @@
 
   function buildOcrCandidates(pageData,validity,options) {
     const inferCategory=window.MercadorIA?.inferCategory;
-    const passPrices=(pageData.passLines||[]).map((entry)=>collectPassPrices(entry));
-    const prices=mergePricePasses(passPrices);
+    const passContexts=(pageData.passLines||[]).map((entry)=>{
+      const prices=collectPassPrices(entry);
+      return {entry,prices,fragments:buildTextFragments(entry.words||[],prices)};
+    });
+    const prices=mergePricePasses(passContexts.map((ctx)=>ctx.prices));
     const fragments=buildTextFragments(pageData.words,prices);
     const raw=[];
 
     prices.forEach((price,index)=>{
-      const product=productForPrice(price,fragments,prices,pageData.canvasWidth);
+      const variants=[];
+      let mergedProduct=productForPrice(price,fragments,prices,pageData.canvasWidth);
+      if(mergedProduct){mergedProduct=expandProductDescription(mergedProduct,price,fragments,prices,pageData.canvasWidth);variants.push({...mergedProduct,descriptionPass:'merged'});}
+
+      // Reavalia a descrição em cada passagem que realmente enxergou este preço. Isso evita
+      // que o merge global escolha apenas a última linha ("Fatiado Seara") quando uma leitura
+      // densa possui o nome completo ("Presunto Sem Capa ... Fatiado Seara Pacote 200g").
+      (price.observations||[]).forEach((observation)=>{
+        if(observation.pass==='color')return; // máscara cromática ajuda no preço, não na descrição.
+        const ctx=passContexts.find((x)=>x.entry.pass===observation.pass);
+        if(!ctx)return;
+        let localPrice=ctx.prices.find((p)=>p===observation);
+        if(!localPrice){
+          const oc=center(observation.box);
+          localPrice=ctx.prices.filter((p)=>Math.abs(Number(p.price)-Number(price.price))<.011).sort((a,b)=>{
+            const ac=center(a.box),bc=center(b.box);
+            return Math.hypot(ac.x-oc.x,ac.y-oc.y)-Math.hypot(bc.x-oc.x,bc.y-oc.y);
+          })[0];
+        }
+        if(!localPrice)return;
+        let local=productForPrice(localPrice,ctx.fragments,ctx.prices,pageData.canvasWidth);
+        if(local){local=expandProductDescription(local,localPrice,ctx.fragments,ctx.prices,pageData.canvasWidth);variants.push({...local,descriptionPass:observation.pass});}
+      });
+
+      const product=chooseProductDescriptionVariant(variants);
       if(!product||!product.productName||product.productName.length<3)return;
       if(isInstitutionalText(product.productName))return;
       const wordsCount=product.productName.split(/\s+/).filter(Boolean).length;
@@ -704,14 +898,18 @@
         conditions:validity?.condition||'',confidence:quality.confidence,riskFlags:quality.risks,evidence:quality.evidence,
         associationAgreement:product.spatial,
         ownershipConfidence:product.ownershipConfidence,
-        clusterCoherence:product.semantic,
+        clusterCoherence:Number(product.descriptionFidelity ?? product.semantic),
+        descriptionCompleteness:Number(product.completeness ?? descriptionCompletenessScore(product.productName)),
+        descriptionAgreement:Number(product.descriptionAgreement ?? 1),
+        descriptionVariantCount:Number(product.descriptionVariantCount || 1),
+        descriptionPass:product.descriptionPass || 'merged',
         // Mantidos também para compatibilidade com versões intermediárias.
-        domainOwnership:product.ownershipConfidence,blockCoherence:product.semantic,
+        domainOwnership:product.ownershipConfidence,blockCoherence:Number(product.descriptionFidelity ?? product.semantic),
         structuralSafe:quality.structuralSafe,automationSafe:quality.automationSafe,
         sourceBox:toSourceBox(sourceBoxCanvas,pageData.renderScale),startAt:validity?.startAt||null,endAt:validity?.endAt||null,
         verified:false,verificationMode:'',ignored:false,published:false,reviewed:false,
         extractionMode:'ocr-image-fallback',ocrConfidence:Number(((product.ocrConfidence+price.confidence)/2/100).toFixed(3)),
-        ocrPricePasses:price.passCount,ocrPriceScale:Number(price.scale.toFixed(2)),ocrSemanticScore:Number(product.semantic.toFixed(3))
+        ocrPricePasses:price.passCount,ocrPriceScale:Number(price.scale.toFixed(2)),ocrSemanticScore:Number(product.semantic.toFixed(3)),ocrDescriptionCompleteness:Number((product.completeness ?? descriptionCompletenessScore(product.productName)).toFixed(3)),ocrDescriptionAgreement:Number((product.descriptionAgreement ?? 1).toFixed(3))
       });
     });
 
@@ -765,6 +963,157 @@
     const words=normalizeOcrWords(result.data,{pass,offsetX,offsetY});
     const lines=segmentRows(words);
     return {pass,words,lines,text:cleanText(result.data?.text||lines.map((x)=>x.text).join(' ')),medianWordHeight:median(words.map((w)=>w.height))||16};
+  }
+
+
+  function splitNativeTextItem(item,pdfjsLib,viewport,pass='native') {
+    const text=cleanText(item?.str||'');
+    if(!text)return [];
+    let tx;
+    try{tx=pdfjsLib.Util.transform(viewport.transform,item.transform);}catch(_){tx=[1,0,0,1,0,0];}
+    const fontHeight=Math.max(1,Math.hypot(Number(tx[2]||0),Number(tx[3]||0))||Math.abs(Number(item.height||0)*viewport.scale)||10);
+    const totalWidth=Math.max(1,Math.abs(Number(item.width||0)*viewport.scale)||text.length*fontHeight*.48);
+    const x0=Number(tx[4]||0),baselineY=Number(tx[5]||fontHeight),y0=baselineY-fontHeight,y1=baselineY;
+    const tokens=[...text.matchAll(/\S+/g)];
+    if(!tokens.length)return [];
+    const charTotal=Math.max(1,text.length);
+    return tokens.map((match,index)=>{
+      const start=match.index||0,end=start+match[0].length;
+      const left=x0+totalWidth*(start/charTotal),right=x0+totalWidth*(end/charTotal);
+      return {id:`${pass}-${index}-${start}`,pass,text:cleanText(match[0]),confidence:100,x0:left,y0,x1:Math.max(left+1,right),y1,width:Math.max(1,right-left),height:fontHeight,passNames:new Set([pass]),passCount:1};
+    });
+  }
+
+  async function analyzeNativeKnowledge(file,onProgress) {
+    const pdfjsLib=await loadPdfJs();
+    const bytes=await file.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data:bytes,cMapUrl:`${PDFJS_BASE}/cmaps/`,cMapPacked:true,standardFontDataUrl:`${PDFJS_BASE}/standard_fonts/`,wasmUrl:`${PDFJS_BASE}/wasm/`}).promise;
+    const pages=[],documentTexts=[];
+    for(let pageNumber=1;pageNumber<=pdf.numPages;pageNumber+=1){
+      if(onProgress)onProgress({pageNumber,numPages:pdf.numPages,percent:Math.round(((pageNumber-1)/Math.max(1,pdf.numPages))*18),mode:'knowledge-native'});
+      const page=await pdf.getPage(pageNumber);
+      const baseViewport=page.getViewport({scale:1});
+      const renderScale=2.25;
+      const viewport=page.getViewport({scale:renderScale});
+      const textContent=await page.getTextContent({normalizeWhitespace:false,disableCombineTextItems:false});
+      const words=[];
+      (textContent.items||[]).forEach((item,index)=>{
+        splitNativeTextItem(item,pdfjsLib,viewport,`native-${pageNumber}-${index}`).forEach((word)=>words.push(word));
+      });
+      const lines=segmentRows(words);
+      const text=cleanText(lines.map((x)=>x.text).join(' '));
+      const entry={pass:'native',words,lines,text,medianWordHeight:median(words.map((w)=>w.height))||16};
+      const prices=collectPassPrices(entry);
+      const usefulWords=words.filter((w)=>!isInstitutionalText(w.text));
+      const expectedFloor=Math.round(clamp(usefulWords.length/10.5,2,34));
+      pages.push({pageNumber,pageWidth:baseViewport.width,pageHeight:baseViewport.height,canvasWidth:viewport.width,canvasHeight:viewport.height,renderScale,words,lines,text,passLines:[entry],priceCoverageCount:prices.length,expectedPriceFloor:expectedFloor,coveragePasses:0,knowledgeMode:'native'});
+      documentTexts.push(text);
+    }
+    return {pages,documentText:documentTexts.join(' '),numPages:pdf.numPages};
+  }
+
+  function knowledgePageNeedsOcr(page) {
+    const words=page?.words?.length||0;
+    const textChars=String(page?.text||'').replace(/\s+/g,'').length;
+    const prices=Number(page?.priceCoverageCount||0);
+    const expected=Math.max(2,Number(page?.expectedPriceFloor||2));
+    return words<28 || textChars<140 || prices<Math.min(5,Math.ceil(expected*.5));
+  }
+
+  function mergeKnowledgePages(nativePage,ocrPage) {
+    if(!nativePage)return ocrPage;
+    if(!ocrPage)return nativePage;
+    const passLines=[...(nativePage.passLines||[]),...(ocrPage.passLines||[])];
+    const textPasses=passLines.filter((p)=>p.pass!=='color');
+    const words=mergeOcrWords(textPasses.map((p)=>p.words||[]));
+    const lines=segmentRows(words);
+    const text=cleanText([...new Set(textPasses.map((p)=>p.text||'').filter(Boolean))].join(' '));
+    const prices=mergePricePasses(passLines.map((entry)=>collectPassPrices(entry)));
+    return {...ocrPage,...nativePage,canvasWidth:ocrPage.canvasWidth||nativePage.canvasWidth,canvasHeight:ocrPage.canvasHeight||nativePage.canvasHeight,renderScale:ocrPage.renderScale||nativePage.renderScale,words,lines,text,passLines,priceCoverageCount:prices.length,expectedPriceFloor:Math.max(Number(nativePage.expectedPriceFloor||0),Number(ocrPage.expectedPriceFloor||0)),coveragePasses:Number(ocrPage.coveragePasses||0),knowledgeMode:'hybrid'};
+  }
+
+  function serializableWord(word) {
+    return {id:word.id||'',text:word.text||'',normalized:fold(word.text||''),confidence:Number(word.confidence||0),bbox:{x:Number(word.x0||0),y:Number(word.y0||0),width:Number(word.width||Math.max(0,Number(word.x1||0)-Number(word.x0||0))),height:Number(word.height||Math.max(0,Number(word.y1||0)-Number(word.y0||0)))},sources:[...(word.passNames||new Set([word.pass||'unknown']))]};
+  }
+
+  function serializableLine(line) {
+    return {text:line.text||'',confidence:Number(line.confidence||0),bbox:line.box?{x:Number(line.box.x0||0),y:Number(line.box.y0||0),width:Number(line.box.width||0),height:Number(line.box.height||0)}:null,wordIds:(line.words||[]).map((w)=>w.id||'').filter(Boolean)};
+  }
+
+  function knowledgePriceFacts(page) {
+    return mergePricePasses((page.passLines||[]).map((entry)=>collectPassPrices(entry))).map((price)=>({value:Number(price.price),text:price.text||'',confidence:Number(price.confidence||0),currencyExplicit:price.explicitCurrency===true,pattern:price.pattern||'',passes:Number(price.passCount||1),bbox:price.box?{x:Number(price.box.x0||0),y:Number(price.box.y0||0),width:Number(price.box.width||0),height:Number(price.box.height||0)}:null}));
+  }
+
+  function buildKnowledgeDocument(file,hash,pages,validity,candidates,legacyResult) {
+    const modes=[...new Set(pages.map((p)=>p.knowledgeMode||'unknown'))];
+    const documentText=cleanText(pages.map((p)=>p.text||'').join(' '));
+    return {
+      schemaVersion:KNOWLEDGE_SCHEMA_VERSION,
+      engineVersion:OCR_ENGINE_VERSION,
+      generatedAt:new Date().toISOString(),
+      source:{fileName:file.name||'',mimeType:file.type||'application/pdf',size:Number(file.size||0),sha256:hash||'',numPages:pages.length},
+      extraction:{modes,pdfjsVersion:PDFJS_VERSION,tesseractVersion:TESSERACT_VERSION,legacyValidator:legacyResult?.engineVersion||base.ENGINE_VERSION||'2.2.0'},
+      validity:validity||null,
+      documentText,
+      pages:pages.map((page)=>({pageNumber:page.pageNumber,width:Number(page.pageWidth||0),height:Number(page.pageHeight||0),mode:page.knowledgeMode||'unknown',text:page.text||'',metrics:{words:page.words?.length||0,lines:page.lines?.length||0,pricesDetected:Number(page.priceCoverageCount||0),expectedPriceFloor:Number(page.expectedPriceFloor||0),coveragePasses:Number(page.coveragePasses||0)},words:(page.words||[]).map(serializableWord),lines:(page.lines||[]).map(serializableLine),prices:knowledgePriceFacts(page)})),
+      promotionFacts:(candidates||[]).map((c)=>({id:c.id,pageNumber:c.pageNumber,productName:c.productName,category:c.category||'outros',packageText:c.packageText||'',price:Number(c.price||0),previousPrice:Number(c.previousPrice||0)||null,priceKind:c.priceKind||'general',conditions:c.conditions||'',confidence:Number(c.confidence||0),riskFlags:[...(c.riskFlags||[])],evidence:[...(c.evidence||[])],bbox:c.sourceBox||null,knowledgeMode:c.knowledgeMode||c.extractionMode||''}))
+    };
+  }
+
+  async function sha256Hex(file) {
+    try{
+      const bytes=await file.arrayBuffer();
+      const hash=await crypto.subtle.digest('SHA-256',bytes);
+      return [...new Uint8Array(hash)].map((b)=>b.toString(16).padStart(2,'0')).join('');
+    }catch(_){return '';}
+  }
+
+  function sourceBoxCenter(candidate){const b=candidate?.sourceBox;if(!b)return null;return {x:Number(b.x||0)+Number(b.width||0)/2,y:Number(b.y||0)+Number(b.height||0)/2};}
+
+  function mergeCandidateEngines(knowledgeCandidates,legacyCandidates) {
+    const result=knowledgeCandidates.map((x)=>({...x,knowledgeMode:x.knowledgeMode||x.extractionMode||'knowledge-json'}));
+    (legacyCandidates||[]).forEach((legacy)=>{
+      const lc=sourceBoxCenter(legacy);
+      let bestIndex=-1,bestScore=0;
+      result.forEach((candidate,index)=>{
+        if(Number(candidate.pageNumber||0)!==Number(legacy.pageNumber||0))return;
+        if(Math.abs(Number(candidate.price||0)-Number(legacy.price||0))>.011)return;
+        const kc=sourceBoxCenter(candidate);
+        const distance=(lc&&kc)?Math.hypot(lc.x-kc.x,lc.y-kc.y):Infinity;
+        const nameScore=productSimilarity(candidate.productName,legacy.productName);
+        const positionScore=Number.isFinite(distance)?clamp(1-distance/150,0,1):0;
+        const score=Math.max(nameScore,positionScore*.72+nameScore*.28);
+        if(score>bestScore){bestScore=score;bestIndex=index;}
+      });
+      if(bestIndex>=0&&bestScore>=.38){
+        const current=result[bestIndex];
+        const similarity=productSimilarity(current.productName,legacy.productName);
+        const currentCompleteness=descriptionCompletenessScore(current.productName);
+        const legacyCompleteness=descriptionCompletenessScore(legacy.productName);
+        const conflict=similarity<.20&&current.productName&&legacy.productName;
+        const risks=new Set([...(current.riskFlags||[]),...(legacy.riskFlags||[])]);
+        if(conflict)risks.add('knowledge_legacy_description_conflict');
+        const evidence=new Set([...(current.evidence||[]),...(legacy.evidence||[])]);
+        evidence.add(conflict?'JSON de conhecimento e motor legado discordam na descrição':'JSON de conhecimento validado por segunda leitura independente');
+        const useLegacy=!conflict&&legacyCompleteness>currentCompleteness+.14;
+        result[bestIndex]={...legacy,...current,productName:useLegacy?legacy.productName:current.productName,packageText:useLegacy?(legacy.packageText||current.packageText):current.packageText,riskFlags:[...risks],evidence:[...evidence],confidence:conflict?Math.min(Number(current.confidence||0),Number(legacy.confidence||0),.89):Math.min(1,Math.max(Number(current.confidence||0),Number(legacy.confidence||0))+.01),automationSafe:!conflict&&(current.automationSafe===true||legacy.automationSafe===true),structuralSafe:!conflict&&(current.structuralSafe===true||legacy.structuralSafe===true),knowledgeMode:'knowledge-json-validated',extractionMode:'knowledge-json-validated'};
+      }else{
+        result.push({...legacy,evidence:[...(legacy.evidence||[]),'Mantido pelo motor PDF anterior para compatibilidade sem regressão'],knowledgeMode:'legacy-compatibility',extractionMode:legacy.extractionMode||'legacy-compatibility'});
+      }
+    });
+    const dedup=[];
+    result.sort((a,b)=>Number(b.confidence||0)-Number(a.confidence||0)).forEach((candidate)=>{
+      const cc=sourceBoxCenter(candidate);
+      const duplicate=dedup.some((x)=>{
+        if(Number(x.pageNumber||0)!==Number(candidate.pageNumber||0))return false;
+        if(Math.abs(Number(x.price||0)-Number(candidate.price||0))>.011)return false;
+        const xc=sourceBoxCenter(x);
+        const pos=cc&&xc?Math.hypot(cc.x-xc.x,cc.y-xc.y)<45:false;
+        return pos&&productSimilarity(x.productName,candidate.productName)>=.45;
+      });
+      if(!duplicate)dedup.push(candidate);
+    });
+    return dedup;
   }
 
   async function analyzeImagePdf(file,options,onProgress) {
@@ -863,17 +1212,64 @@
       const documentText=documentTexts.join(' '),validity=enrichValidity(documentText,file.name);
       const candidates=pages.flatMap((page)=>buildOcrCandidates(page,validity,options));
       if(onProgress)onProgress({pageNumber:pdf.numPages,numPages:pdf.numPages,percent:100,mode:'ocr'});
-      return {validity,candidates,documentText,numPages:pdf.numPages,ocrPages:pages.map((p)=>({pageNumber:p.pageNumber,words:p.words.length,lines:p.lines.length,passes:p.passLines.length,pricesDetected:p.priceCoverageCount,expectedFloor:p.expectedPriceFloor,coveragePasses:p.coveragePasses}))};
+      return {validity,candidates,documentText,numPages:pdf.numPages,pages,ocrPages:pages.map((p)=>({pageNumber:p.pageNumber,words:p.words.length,lines:p.lines.length,passes:p.passLines.length,pricesDetected:p.priceCoverageCount,expectedFloor:p.expectedPriceFloor,coveragePasses:p.coveragePasses}))};
     }finally{await worker.terminate().catch(()=>{});}
   }
 
   async function analyzeFile(file,options={},onProgress) {
-    const nativeResult=await originalAnalyzeFile(file,options,onProgress);
-    if(Array.isArray(nativeResult.candidates)&&nativeResult.candidates.length>0)return {...nativeResult,extractionMode:nativeResult.extractionMode||'pdf-text'};
-    if(onProgress)onProgress({pageNumber:1,numPages:nativeResult.numPages||1,percent:1,mode:'ocr'});
-    const ocr=await analyzeImagePdf(file,options,onProgress);
-    return {...nativeResult,validity:ocr.validity?.startAt?ocr.validity:nativeResult.validity,candidates:ocr.candidates,numPages:ocr.numPages||nativeResult.numPages,engineVersion:OCR_ENGINE_VERSION,extractionMode:'ocr-image-fallback',ocrEngine:`tesseract.js-${TESSERACT_VERSION}`,ocrPages:ocr.ocrPages};
+    const hashPromise=sha256Hex(file);
+    if(onProgress)onProgress({pageNumber:1,numPages:1,percent:1,mode:'knowledge-json'});
+
+    // 1) O PDF vira primeiro um documento canônico de conhecimento. A extração comercial
+    // acontece somente depois dessa camada, independentemente de o PDF ser textual, híbrido ou imagem.
+    const nativeKnowledge=await analyzeNativeKnowledge(file,onProgress);
+    let pages=nativeKnowledge.pages;
+    const sparsePages=pages.filter(knowledgePageNeedsOcr).map((p)=>p.pageNumber);
+    let ocrResult=null;
+
+    // 2) OCR não substitui o texto nativo: ele complementa somente quando a página não trouxe
+    // cobertura suficiente. Em PDF híbrido, as duas evidências permanecem no mesmo JSON.
+    if(sparsePages.length){
+      if(onProgress)onProgress({pageNumber:sparsePages[0],numPages:nativeKnowledge.numPages,percent:19,mode:'knowledge-ocr'});
+      ocrResult=await analyzeImagePdf(file,options,(progress)=>{
+        if(!onProgress)return;
+        onProgress({...progress,percent:Math.round(20+Number(progress.percent||0)*.62),mode:'knowledge-ocr'});
+      });
+      const ocrByPage=new Map((ocrResult.pages||[]).map((p)=>[Number(p.pageNumber),p]));
+      pages=pages.map((nativePage)=>sparsePages.includes(nativePage.pageNumber)?mergeKnowledgePages(nativePage,ocrByPage.get(nativePage.pageNumber)):nativePage);
+    }
+
+    const documentText=cleanText(pages.map((p)=>p.text||'').join(' '));
+    const validity=enrichValidity(documentText,file.name);
+    const knowledgeCandidates=pages.flatMap((page)=>buildOcrCandidates(page,validity,options));
+
+    // 3) O motor anterior não é removido. Ele passa a atuar como validador independente e
+    // caminho de compatibilidade para não regredir PDFs que já funcionavam bem.
+    if(onProgress)onProgress({pageNumber:1,numPages:nativeKnowledge.numPages,percent:84,mode:'legacy-validator'});
+    const legacyResult=await originalAnalyzeFile(file,options,(progress)=>{
+      if(!onProgress)return;
+      onProgress({...progress,percent:Math.round(84+Number(progress.percent||0)*.13),mode:'legacy-validator'});
+    });
+    const candidates=mergeCandidateEngines(knowledgeCandidates,legacyResult.candidates||[]);
+    const hash=(await hashPromise)||legacyResult.hash||'';
+    const knowledgeDocument=buildKnowledgeDocument(file,hash,pages,validity,candidates,legacyResult);
+    const modes=knowledgeDocument.extraction.modes;
+    const extractionMode=modes.includes('hybrid')?'knowledge-json-hybrid':(modes.includes('native')&&!ocrResult?'knowledge-json-native':'knowledge-json-ocr');
+
+    if(onProgress)onProgress({pageNumber:nativeKnowledge.numPages,numPages:nativeKnowledge.numPages,percent:100,mode:'knowledge-json'});
+    const result={...legacyResult,fileName:legacyResult.fileName||file.name,hash,numPages:nativeKnowledge.numPages,validity:validity?.startAt?validity:(legacyResult.validity||validity),candidates,engineVersion:OCR_ENGINE_VERSION,extractionMode,knowledgeSchemaVersion:KNOWLEDGE_SCHEMA_VERSION,knowledgeDocument,knowledgeMetrics:{pages:pages.length,modes,words:pages.reduce((s,p)=>s+(p.words?.length||0),0),lines:pages.reduce((s,p)=>s+(p.lines?.length||0),0),prices:pages.reduce((s,p)=>s+knowledgePriceFacts(p).length,0),candidates:candidates.length},ocrEngine:ocrResult?`tesseract.js-${TESSERACT_VERSION}`:'',ocrPages:ocrResult?.ocrPages||[]};
+    window.MercadorPDFImporter.lastKnowledgeDocument=knowledgeDocument;
+    return result;
   }
 
-  window.MercadorPDFImporter={...base,ENGINE_VERSION:OCR_ENGINE_VERSION,analyzeFile};
+  function downloadKnowledgeJson(knowledgeDocument,fileName='encarte') {
+    const data=knowledgeDocument||window.MercadorPDFImporter?.lastKnowledgeDocument;
+    if(!data)throw new Error('Nenhum JSON de conhecimento disponível. Analise um encarte primeiro.');
+    const safe=String(fileName||'encarte').replace(/\.pdf$/i,'').replace(/[^a-z0-9._-]+/gi,'_');
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'});
+    const url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download=`${safe}.mercador-knowledge.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+
+  window.MercadorPDFImporter={...base,ENGINE_VERSION:OCR_ENGINE_VERSION,KNOWLEDGE_SCHEMA_VERSION,analyzeFile,downloadKnowledgeJson,getLastKnowledgeDocument:()=>window.MercadorPDFImporter.lastKnowledgeDocument||null,lastKnowledgeDocument:null};
 })();

@@ -87,7 +87,7 @@
           <div>
             <div class="eyebrow">Automação supervisionada</div>
             <h1>Motor automático de encartes</h1>
-            <p class="muted">Analisa o PDF em duas passagens espaciais, valida preço, produto e validade e, quando o encarte for somente imagem, ativa OCR visual automaticamente. Publica apenas os casos seguros e separa somente as exceções para revisão.</p>
+            <p class="muted">Primeiro transforma cada PDF em um JSON de conhecimento com páginas, palavras, coordenadas, preços, validade e evidências. Depois extrai as promoções desse documento estruturado, usando texto nativo, OCR ou ambos, sem perder o motor anterior como validador independente.</p>
           </div>
         </div>
 
@@ -143,6 +143,7 @@
               <button class="btn btn-secondary" id="pdfPublishAutoBtn" type="button">Publicar automáticos seguros</button>
               <button class="btn btn-secondary" id="pdfPublishVerifiedBtn" type="button">Publicar revisados</button>
               <button class="btn btn-danger" id="pdfDiscardPendingBtn" type="button">Excluir pendentes de revisão</button>
+              <button class="btn btn-secondary" id="pdfDownloadKnowledgeBtn" type="button" disabled>Baixar JSON de conhecimento</button>
             </div>
           </div>
           <div id="pdfImportMeta" class="small muted" style="margin-bottom:12px"></div>
@@ -239,8 +240,8 @@
   <script src="./js/auth.js?v=2.8.0"></script>
   <script src="./js/smart-matcher.js?v=2.8.0"></script>
   <script src="./js/pdf-encarte-importer.js?v=2.8.0"></script>
-  <script src="./js/pdf-encarte-ocr-fallback.js?v=2.8.4"></script>
-  <script src="./js/admin.js?v=2.8.3"></script>
+  <script src="./js/pdf-encarte-ocr-fallback.js?v=2.8.6"></script>
+  <script src="./js/admin.js?v=2.8.6"></script>
   <script src="./js/pwa.js?v=2.8.0"></script>
 </body>
 </html>
