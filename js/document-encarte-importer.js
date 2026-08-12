@@ -12,13 +12,13 @@
   }
   if (previous.__multiFormatDocumentImporterInstalled) return;
 
-  const ENGINE_VERSION = '6.0.0-multiformat-document-intelligence';
+  const ENGINE_VERSION = '6.2.0-grid-badge-consensus';
   const KNOWLEDGE_SCHEMA_VERSION = 'mercador.encarte.knowledge.v6';
   const TESSERACT_VERSION = '5.1.1';
   const TESSERACT_URL = `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/dist/tesseract.min.js`;
   const MAX_IMAGE_FILES = 12;
   const MAX_IMAGE_BYTES = 18 * 1024 * 1024;
-  const IMAGE_TARGET_WIDTH = 2500;
+  const IMAGE_TARGET_WIDTH = 900;
   const IMAGE_MAX_HEIGHT = 6200;
 
   const previousAnalyzeFile = previous.analyzeFile.bind(previous);
@@ -444,7 +444,7 @@
     return {id:word.id,text:word.text,normalized:normalizeName(word.text),confidence:Number(word.confidence||0),bbox:{x:word.x,y:word.y,width:word.width,height:word.height},sources:[...(word.sources||[])],alternatives:[...(word.alternatives||[])]};
   }
 
-  async function analyzeImages(files, options={}, onProgress) {
+  async function analyzeImagesLegacy(files, options={}, onProgress) {
     const list=[...(files||[])].filter((file)=>String(file.type||'').startsWith('image/'));
     if(!list.length)throw new Error('Selecione pelo menos uma imagem válida.');
     if(list.length>MAX_IMAGE_FILES)throw new Error(`Selecione no máximo ${MAX_IMAGE_FILES} imagens por análise.`);
@@ -512,6 +512,718 @@
       if(onProgress)onProgress({pageNumber:pages.length,numPages:pages.length,percent:100,mode:'image-complete'});
       return result;
     }finally{await worker.terminate().catch(()=>{});}
+  }
+
+
+  function makeCanvas(width, height) {
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(width || 1));
+    canvas.height = Math.max(1, Math.round(height || 1));
+    return canvas;
+  }
+
+  function cropCanvas(source, box, scale = 1) {
+    const sx = clamp(Math.round(Number(box?.x || 0)), 0, Math.max(0, source.width - 1));
+    const sy = clamp(Math.round(Number(box?.y || 0)), 0, Math.max(0, source.height - 1));
+    const sw = clamp(Math.round(Number(box?.width || source.width)), 1, Math.max(1, source.width - sx));
+    const sh = clamp(Math.round(Number(box?.height || source.height)), 1, Math.max(1, source.height - sy));
+    const canvas = makeCanvas(sw * scale, sh * scale);
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  }
+
+  function preprocessBadgeCanvas(source, mode = 'text') {
+    const canvas = makeCanvas(source.width, source.height);
+    const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
+    ctx.drawImage(source, 0, 0);
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const d = image.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i], g = d[i + 1], b = d[i + 2];
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      const sat = Math.max(r, g, b) - Math.min(r, g, b);
+      let ink = false;
+      if (mode === 'price') ink = lum >= 150 || (lum >= 118 && sat <= 78);
+      else ink = lum >= 142 || (lum >= 112 && sat <= 84);
+      const v = ink ? 0 : 255;
+      d[i] = d[i + 1] = d[i + 2] = v;
+      d[i + 3] = 255;
+    }
+    ctx.putImageData(image, 0, 0);
+    return canvas;
+  }
+
+  async function recognizeCanvasQuick(worker, canvas, psm = 6, whitelist = '') {
+    await worker.setParameters({ preserve_interword_spaces: '1', tessedit_pageseg_mode: String(psm), tessedit_char_whitelist: whitelist }).catch(() => {});
+    const result = await worker.recognize(canvas);
+    return { text: clean(result?.data?.text || ''), words: normalizeWords(result?.data || {}, 'grid-card') };
+  }
+
+  function connectedComponents(mask, width, height) {
+    const visited = new Uint8Array(width * height);
+    const components = [];
+    const queue = new Int32Array(width * height);
+    for (let i = 0; i < mask.length; i += 1) {
+      if (!mask[i] || visited[i]) continue;
+      let head = 0, tail = 0;
+      queue[tail++] = i;
+      visited[i] = 1;
+      let minX = width, minY = height, maxX = 0, maxY = 0, area = 0;
+      while (head < tail) {
+        const idx0 = queue[head++];
+        const y = Math.floor(idx0 / width);
+        const x = idx0 - y * width;
+        area += 1;
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+        const neighbors = [idx0 - 1, idx0 + 1, idx0 - width, idx0 + width];
+        if (x > 0 && mask[neighbors[0]] && !visited[neighbors[0]]) { visited[neighbors[0]] = 1; queue[tail++] = neighbors[0]; }
+        if (x + 1 < width && mask[neighbors[1]] && !visited[neighbors[1]]) { visited[neighbors[1]] = 1; queue[tail++] = neighbors[1]; }
+        if (y > 0 && mask[neighbors[2]] && !visited[neighbors[2]]) { visited[neighbors[2]] = 1; queue[tail++] = neighbors[2]; }
+        if (y + 1 < height && mask[neighbors[3]] && !visited[neighbors[3]]) { visited[neighbors[3]] = 1; queue[tail++] = neighbors[3]; }
+      }
+      const w = maxX - minX + 1, h = maxY - minY + 1;
+      const density = area / Math.max(1, w * h);
+      components.push({ x: minX, y: minY, width: w, height: h, area, density, cx: minX + w / 2, cy: minY + h / 2 });
+    }
+    return components;
+  }
+
+  function clusterCenters(values, tolerance) {
+    const groups = [];
+    [...values].sort((a, b) => a - b).forEach((value) => {
+      let best = null;
+      groups.forEach((group) => {
+        if (Math.abs(group.center - value) <= tolerance && (!best || Math.abs(group.center - value) < Math.abs(best.center - value))) best = group;
+      });
+      if (!best) {
+        best = { values: [value], center: value };
+        groups.push(best);
+      } else {
+        best.values.push(value);
+        best.center = best.values.reduce((sum, x) => sum + x, 0) / best.values.length;
+      }
+    });
+    return groups;
+  }
+
+  function average(values) {
+    return (values || []).length ? values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length : 0;
+  }
+
+  function stddev(values) {
+    if (!(values || []).length) return 0;
+    const mean = average(values);
+    return Math.sqrt(average(values.map((value) => Math.pow(Number(value || 0) - mean, 2))));
+  }
+
+  function segmentsAbove(values, threshold) {
+    const output = [];
+    let start = -1;
+    for (let i = 0; i < values.length; i += 1) {
+      if (Number(values[i] || 0) >= threshold && start < 0) start = i;
+      if ((Number(values[i] || 0) < threshold || i === values.length - 1) && start >= 0) {
+        const end = Number(values[i] || 0) < threshold ? i - 1 : i;
+        output.push({ start, end, width: end - start + 1 });
+        start = -1;
+      }
+    }
+    return output;
+  }
+
+  function detectOfferGrid(canvas) {
+    const W = canvas.width, H = canvas.height;
+    const scale = Math.min(1, 900 / Math.max(1, W));
+    const sw = Math.max(160, Math.round(W * scale));
+    const sh = Math.max(160, Math.round(H * scale));
+    const sample = makeCanvas(sw, sh);
+    const ctx = sample.getContext('2d', { alpha: false, willReadFrequently: true });
+    ctx.drawImage(canvas, 0, 0, sw, sh);
+    const pixels = ctx.getImageData(0, 0, sw, sh).data;
+    const mask = new Uint8Array(sw * sh);
+    for (let i = 0, p = 0; i < pixels.length; i += 4, p += 1) {
+      const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+      mask[p] = (r >= 145 && g <= 138 && b <= 138 && r >= g * 1.22 && r >= b * 1.22) ? 1 : 0;
+    }
+
+    // Prefixo vertical por coluna: permite testar centenas de janelas sem refazer a soma dos pixels.
+    const prefix = new Uint16Array((sh + 1) * sw);
+    for (let y = 0; y < sh; y += 1) {
+      const row = y * sw, prev = y * sw, next = (y + 1) * sw;
+      for (let x = 0; x < sw; x += 1) prefix[next + x] = prefix[prev + x] + mask[row + x];
+    }
+
+    const candidates = [];
+    const minH = Math.max(10, Math.round(sh * .032));
+    const maxH = Math.max(minH + 2, Math.round(sh * .072));
+    const hStep = Math.max(2, Math.round(sh * .004));
+    for (let h = minH; h <= maxH; h += hStep) {
+      const yStep = Math.max(2, Math.round(h * .12));
+      for (let y = 0; y + h <= sh; y += yStep) {
+        const density = new Float32Array(sw);
+        for (let x = 0; x < sw; x += 1) density[x] = (prefix[(y + h) * sw + x] - prefix[y * sw + x]) / h;
+        const rawSegments = segmentsAbove(density, .18);
+        const segments = rawSegments.map((segment) => {
+          let sum = 0;
+          for (let x = segment.start; x <= segment.end; x += 1) sum += density[x];
+          return { ...segment, density: sum / Math.max(1, segment.width), center: (segment.start + segment.end) / 2 };
+        }).filter((segment) => segment.width >= sw * .075 && segment.width <= sw * .25 && segment.density >= .38);
+        if (segments.length < 3 || segments.length > 6) continue;
+        const centers = segments.map((segment) => segment.center);
+        const widths = segments.map((segment) => segment.width);
+        const spacings = centers.slice(1).map((center, index) => center - centers[index]);
+        if (spacings.length < 2) continue;
+        const spacingCv = stddev(spacings) / Math.max(1, average(spacings));
+        const widthCv = stddev(widths) / Math.max(1, average(widths));
+        if (spacingCv > .18 || widthCv > .22) continue;
+        const score = segments.length * 20 + average(segments.map((segment) => segment.density)) * 10 - spacingCv * 20 - widthCv * 10;
+        candidates.push({ y, h, segments, centers, count: segments.length, score });
+      }
+    }
+    if (!candidates.length) return null;
+
+    // NMS vertical: uma única observação por faixa vermelha repetida.
+    const rows = [];
+    candidates.sort((a, b) => b.score - a.score).forEach((candidate) => {
+      const cy = candidate.y + candidate.h / 2;
+      if (rows.some((row) => Math.abs(cy - (row.y + row.h / 2)) < Math.max(candidate.h, row.h) * 1.15)) return;
+      rows.push(candidate);
+    });
+
+    // A grade vencedora precisa repetir o MESMO padrão horizontal em pelo menos duas linhas.
+    const groups = [];
+    rows.forEach((row) => {
+      let group = groups.find((entry) => entry.count === row.count
+        && average(row.centers.map((center, index) => Math.abs(center - Number(entry.centers[index] || center)))) <= sw * .035);
+      if (!group) {
+        group = { count: row.count, rows: [], centers: [...row.centers] };
+        groups.push(group);
+      }
+      group.rows.push(row);
+      group.centers = group.centers.map((_, index) => average(group.rows.map((item) => item.centers[index])));
+    });
+    groups.forEach((group) => {
+      const ys = group.rows.map((row) => row.y + row.h / 2).sort((a, b) => a - b);
+      const gaps = ys.slice(1).map((value, index) => value - ys[index]);
+      const verticalCv = gaps.length >= 2 ? stddev(gaps) / Math.max(1, average(gaps)) : (gaps.length === 1 ? .25 : 1);
+      group.score = group.rows.length * group.count * 100 - verticalCv * 100 + average(group.rows.map((row) => row.score));
+    });
+    const group = groups.filter((entry) => entry.rows.length >= 2 && entry.rows.length * entry.count >= 6).sort((a, b) => b.score - a.score)[0];
+    if (!group) return null;
+
+    const selectedRows = [...group.rows].sort((a, b) => a.y - b.y);
+    const allSegments = selectedRows.flatMap((row) => row.segments);
+    const medianSegmentWidth = median(allSegments.map((segment) => segment.width));
+    const badgeWidth = medianSegmentWidth * 1.045;
+    const badgeHeight = badgeWidth / 1.94;
+    const invScale = 1 / scale;
+    const centersX = group.centers;
+    const centersY = selectedRows.map((row) => row.y + row.h / 2);
+    const cards = [];
+
+    selectedRows.forEach((row, rowIndex) => {
+      row.segments.sort((a, b) => a.center - b.center).forEach((segment, colIndex) => {
+        const cx = segment.center;
+        const badgeBottom = row.y + row.h + Math.max(2, Math.round(row.h * .03));
+        const badgeSample = {
+          x: cx - badgeWidth / 2,
+          y: badgeBottom - badgeHeight,
+          width: badgeWidth,
+          height: badgeHeight
+        };
+        const left = colIndex === 0 ? Math.max(0, cx - (centersX[1] ? (centersX[1] - cx) / 2 : badgeWidth * .75)) : (centersX[colIndex - 1] + cx) / 2;
+        const right = colIndex === centersX.length - 1 ? Math.min(sw, cx + (centersX[colIndex - 1] ? (cx - centersX[colIndex - 1]) / 2 : badgeWidth * .75)) : (cx + centersX[colIndex + 1]) / 2;
+        const rowCenter = centersY[rowIndex];
+        const top = rowIndex === 0 ? Math.max(0, rowCenter - (centersY[1] ? (centersY[1] - rowCenter) * .72 : badgeHeight * 2.4)) : (centersY[rowIndex - 1] + rowCenter) / 2;
+        const bottom = rowIndex === centersY.length - 1 ? Math.min(sh, rowCenter + (centersY[rowIndex - 1] ? (rowCenter - centersY[rowIndex - 1]) * .55 : badgeHeight * 2)) : (rowCenter + centersY[rowIndex + 1]) / 2;
+        cards.push({
+          rowIndex,
+          colIndex,
+          badgeBox: {
+            x: Math.max(0, Math.round(badgeSample.x * invScale) + Math.max(1, Math.round(invScale * .55))),
+            y: Math.max(0, Math.round(badgeSample.y * invScale)),
+            width: Math.min(W, Math.round(badgeSample.width * invScale)),
+            height: Math.min(H, Math.round(badgeSample.height * invScale))
+          },
+          cardBox: {
+            x: Math.max(0, Math.round(left * invScale)),
+            y: Math.max(0, Math.round(top * invScale)),
+            width: Math.min(W, Math.round((right - left) * invScale)),
+            height: Math.min(H, Math.round((bottom - top) * invScale))
+          }
+        });
+      });
+    });
+    const offerTop = Math.min(...cards.map((card) => card.cardBox.y));
+    const offerBottom = Math.max(...cards.map((card) => card.cardBox.y + card.cardBox.height));
+    return { cards, rows: selectedRows, cols: centersX, offerTop, offerBottom, medianBadgeWidth: badgeWidth * invScale, medianBadgeHeight: badgeHeight * invScale, pattern: `${selectedRows.length}x${group.count}`, confidence: clamp(.82 + Math.min(.16, selectedRows.length * group.count / 100), .82, .98) };
+  }
+
+  function splitCleanLines(value) {
+    return String(value || '').replace(/\r\n?/g, '\n').split('\n').map((line) => clean(line)).filter(Boolean);
+  }
+
+  function escapeRegExp(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function canonicalPriceText(price) {
+    return `R$ ${Number(price || 0).toFixed(2).replace('.', ',')}`;
+  }
+
+  function parsePriceVotes(texts) {
+    const votes = new Map();
+    (texts || []).forEach((text, index) => {
+      const matches = textPriceMatches(text);
+      matches.forEach((match) => {
+        const key = Number(match.price).toFixed(2);
+        if (!votes.has(key)) votes.set(key, { value: Number(match.price), count: 0, explicit: 0, indexes: [], raw: [] });
+        const row = votes.get(key);
+        row.count += 1;
+        row.explicit += match.currencyExplicit ? 1 : 0;
+        row.indexes.push(index);
+        row.raw.push(clean(match.text));
+      });
+    });
+    const ranked = [...votes.values()].sort((a, b) => b.count - a.count || b.explicit - a.explicit || a.value - b.value);
+    if (!ranked.length) return null;
+    const winner = ranked[0];
+    const runner = ranked[1];
+    return {
+      value: Number(winner.value.toFixed(2)),
+      text: winner.raw.find(Boolean) || canonicalPriceText(winner.value),
+      confidence: runner ? Math.min(92, 68 + winner.count * 8) : Math.min(98, 78 + winner.count * 6 + winner.explicit * 4),
+      currencyExplicit: winner.explicit > 0,
+      pattern: 'grid-badge-ocr',
+      passes: winner.count,
+      passNames: winner.indexes.map((x) => `pass-${x + 1}`),
+      conflict: Boolean(runner),
+      conflictValues: ranked.slice(1, 4).map((x) => Number(x.value.toFixed(2)))
+    };
+  }
+
+  function normalizeUnitToken(value) {
+    const n = normalizeName(value);
+    if (!n) return '';
+    if (/^UNID(?:ADE)?S?$/.test(n)) return 'UNID';
+    if (/^(?:UN|UND)$/.test(n)) return 'UNID';
+    if (/^KG$/.test(n)) return 'KG';
+    if (/^BDJ(?:\s+\d+(?:[.,]\d+)?\s*G)?$/.test(n)) return clean(value).replace(/\bBDJ\b/i, 'BDJ');
+    return clean(value);
+  }
+
+  function cleanProductBlockText(value) {
+    let text = clean(value)
+      .replace(/(?:R\s*\$|R\$|\$)?\s*\d{1,4}\s*[,.;:]\s*\d{2}\b/gi, ' ')
+      .replace(/\b(?:R\$|RS|\$)\b/gi, ' ')
+      .replace(/\b(?:UNID(?:ADE)?S?|UN|UND|KG|BDJ)\b(?=\s*$)/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return clean(text);
+  }
+
+  function pickProductFromBadgeTexts(primaryText, backupText) {
+    const candidates = [];
+    [primaryText, backupText].forEach((text) => {
+      splitCleanLines(text).forEach((line) => {
+        const cleaned = cleanProductBlockText(line);
+        if (!cleaned) return;
+        if (INSTITUTIONAL_RE.test(cleaned)) return;
+        if (/^[\d\s.,]+$/.test(cleaned)) return;
+        candidates.push(cleaned);
+      });
+    });
+    const uniqueCandidates = unique(candidates).sort((a, b) => normalizeName(b).length - normalizeName(a).length);
+    return clean(uniqueCandidates[0] || cleanProductBlockText(primaryText || backupText || ''));
+  }
+
+  const GRID_PRODUCT_LEXICON = new Set(`
+    ALFACE CRESPA VERDURAS ROVERSI CEBOLA BATATA DOCE PEPINO JAPONES REPOLHO VERDE BETERRABA BROCOLIS CENOURA
+    LARANJA PERA BANANA NANICA MAMAO FORMOSA ABACATE MELAO AMARELO GOIABA VERMELHA UVA VITORIA BDJ MANGA PALMER
+    CABOTIA ITALIA TOMATE SWEET GRAPE MANDIOCA SALSA MACA OVOS OVO FRANGO COXA ASA FILE MIGNON SUINO COSTELA PANCETA
+    ACEM CARNE BOVINA TANGERINA MORANGO LIMAO CHUCHU ABOBRINHA COUVE VAGEM BERINJELA MELANCIA ALHO ARROZ FEIJAO CAFE
+    LEITE QUEIJO PRESUNTO MUSSARELA MARGARINA MANTEIGA REQUEIJAO PAO BOLO FARINHA MACARRAO MASSA BISCOITO CHOCOLATE
+    REFRIGERANTE CERVEJA AGUA DETERGENTE SABAO SHAMPOO SABONETE FRALDA AZEITE MOLHO MAIONESE ATUM MILHO
+  `.trim().split(/\s+/));
+  const GRID_PRODUCT_CUES = new Set(`
+    ALFACE CEBOLA BATATA PEPINO REPOLHO BETERRABA BROCOLIS CENOURA LARANJA BANANA MAMAO ABACATE MELAO GOIABA UVA MANGA
+    TOMATE MANDIOCA MACA OVOS OVO FRANGO CARNE ARROZ FEIJAO CAFE LEITE QUEIJO PRESUNTO MUSSARELA PAO BOLO FARINHA
+    MACARRAO MASSA BISCOITO CHOCOLATE REFRIGERANTE CERVEJA AGUA DETERGENTE SABAO SHAMPOO SABONETE FRALDA AZEITE MOLHO
+  `.trim().split(/\s+/));
+
+  function levenshtein(a, b) {
+    const A = String(a || ''), B = String(b || '');
+    const row = Array.from({ length: B.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= A.length; i += 1) {
+      let prev = row[0];
+      row[0] = i;
+      for (let j = 1; j <= B.length; j += 1) {
+        const old = row[j];
+        row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (A[i - 1] === B[j - 1] ? 0 : 1));
+        prev = old;
+      }
+    }
+    return row[B.length];
+  }
+
+  function fuzzyGridToken(token) {
+    const raw = normalizeName(token);
+    if (!raw) return '';
+    if (GRID_PRODUCT_LEXICON.has(raw)) return raw;
+    let best = null;
+    GRID_PRODUCT_LEXICON.forEach((candidate) => {
+      const maxDistance = Math.min(raw.length, candidate.length) >= 5 ? 2 : 1;
+      if (Math.abs(raw.length - candidate.length) > maxDistance) return;
+      const distance = levenshtein(raw, candidate);
+      if (distance <= maxDistance && (!best || distance < best.distance || (distance === best.distance && candidate.length > best.value.length))) {
+        best = { distance, value: candidate };
+      }
+    });
+    return best ? best.value : raw;
+  }
+
+  function splitCompoundGridToken(token) {
+    const raw = normalizeName(token);
+    if (!raw) return [];
+    for (const first of GRID_PRODUCT_LEXICON) {
+      if (first.length < 4 || first === raw || !raw.startsWith(first)) continue;
+      const rest = raw.slice(first.length);
+      if (GRID_PRODUCT_LEXICON.has(rest)) return [first, rest];
+    }
+    return [raw];
+  }
+
+  function thresholdWhiteTextCanvas(source, threshold) {
+    const canvas = makeCanvas(source.width, source.height);
+    const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
+    ctx.drawImage(source, 0, 0);
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = image.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const lum = .299 * data[i] + .587 * data[i + 1] + .114 * data[i + 2];
+      const value = lum > threshold ? 0 : 255;
+      data[i] = data[i + 1] = data[i + 2] = value;
+      data[i + 3] = 255;
+    }
+    ctx.putImageData(image, 0, 0);
+    return canvas;
+  }
+
+  async function ocrThreshold(worker, source, threshold, psm, whitelist = '') {
+    const prepared = thresholdWhiteTextCanvas(source, threshold);
+    try {
+      return await recognizeCanvasQuick(worker, prepared, psm, whitelist);
+    } finally {
+      prepared.width = 1;
+      prepared.height = 1;
+    }
+  }
+
+  function chooseStableProductName(texts) {
+    const lists = [];
+    (texts || []).forEach((raw) => {
+      const expanded = [];
+      normalizeName(raw).split(/\s+/).filter(Boolean).forEach((token) => splitCompoundGridToken(token).forEach((part) => expanded.push(part)));
+      let start = -1;
+      for (let i = 0; i < expanded.length; i += 1) {
+        const corrected = fuzzyGridToken(expanded[i]);
+        if (GRID_PRODUCT_CUES.has(corrected)) { start = i; break; }
+      }
+      if (start < 0) return;
+      const output = [];
+      for (let i = start; i < expanded.length; i += 1) {
+        const token = fuzzyGridToken(expanded[i]);
+        if (/^(?:KG|UNID|UNIDADE|UND|UN)$/.test(token)) break;
+        if (token.length === 1 && !/^\d$/.test(token)) continue;
+        if (/^\d+$/.test(token) && token !== '500') continue;
+        output.push(token);
+      }
+      if (output.length) lists.push(output);
+    });
+    if (!lists.length) return '';
+    const support = new Map();
+    lists.forEach((list) => [...new Set(list)].forEach((token) => support.set(token, Number(support.get(token) || 0) + 1)));
+    const representative = [...lists].sort((a, b) => {
+      const sa = a.filter((token) => Number(support.get(token) || 0) >= 2).length;
+      const sb = b.filter((token) => Number(support.get(token) || 0) >= 2).length;
+      return sb - sa || a.length - b.length;
+    })[0];
+    const stable = representative.filter((token) => Number(support.get(token) || 0) >= 2 || /^\d+(?:G|KG|ML|L)$/.test(token));
+    if (!stable.length) return '';
+    const value = clean(stable.join(' '));
+    return GRID_PRODUCT_CUES.has(stable[0]) && value.length >= 3 ? value : '';
+  }
+
+  function unitFromEvidence(values, productName) {
+    if (/\bBDJ\b/i.test(normalizeName(productName))) return 'BDJ';
+    const aliases = { NG:'KG', UG:'KG', GG:'KG', K6:'KG', K:'KG', G:'KG', UNI:'UNID', UNO:'UNID', UND:'UNID', UID:'UNID', UN:'UNID', JNI:'UNID', IN:'UNID', BD:'BDJ', B0:'BDJ', BO:'BDJ', BDI:'BDJ' };
+    const votes = [];
+    (values || []).forEach((value) => normalizeName(value).split(/\s+/).filter(Boolean).forEach((token) => {
+      const mapped = aliases[token] || token;
+      if (['KG','UNID','BDJ'].includes(mapped)) { votes.push(mapped); return; }
+      ['KG','UNID','BDJ'].some((target) => {
+        if (levenshtein(mapped, target) <= 1) { votes.push(target); return true; }
+        return false;
+      });
+    }));
+    if (!votes.length) return '';
+    const counts = votes.reduce((acc, value) => ({ ...acc, [value]: Number(acc[value] || 0) + 1 }), {});
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+  }
+
+  async function recognizeGridCard(worker, pageCanvas, card) {
+    const badge = cropCanvas(pageCanvas, card.badgeBox, 1);
+    try {
+      const bw = badge.width, bh = badge.height;
+      const nameCrop = cropCanvas(badge, { x:0, y:0, width:bw, height:bh * .38 }, 7);
+      const nameReads = [];
+      for (const threshold of [130, 150, 170]) {
+        const read = await ocrThreshold(worker, nameCrop, threshold, 6, '');
+        if (read.text) nameReads.push(read.text);
+      }
+      nameCrop.width = 1; nameCrop.height = 1;
+      const productText = chooseStableProductName(nameReads);
+      if (!productText || INSTITUTIONAL_RE.test(productText)) return null;
+
+      // Preço: separa o algarismo principal e os centavos. Em selos tipográficos grandes
+      // isso é muito mais estável que pedir ao OCR para compreender R$, reais, vírgula e centavos de uma vez.
+      const majorCrop = cropCanvas(badge, { x:bw * .31, y:bh * .30, width:bw * .25, height:bh * .64 }, 7);
+      const majorVotes = [];
+      for (const threshold of [220, 210, 200, 180]) {
+        const read = await ocrThreshold(worker, majorCrop, threshold, 10, '0123456789');
+        const value = clean(read.text).replace(/\D/g, '');
+        if (/^\d{1,3}$/.test(value)) majorVotes.push(value);
+      }
+      majorCrop.width = 1; majorCrop.height = 1;
+
+      const centsCrop = cropCanvas(badge, { x:bw * .57, y:bh * .30, width:bw * .26, height:bh * .40 }, 7);
+      const centsVotes = [];
+      for (const threshold of [220, 210, 200, 180, 160]) {
+        const read = await ocrThreshold(worker, centsCrop, threshold, 7, '0123456789');
+        const value = clean(read.text).replace(/\D/g, '');
+        if (/^\d{2}$/.test(value)) centsVotes.push(value);
+      }
+      centsCrop.width = 1; centsCrop.height = 1;
+
+      const majority = (values) => {
+        if (!values.length) return '';
+        const counts = values.reduce((acc, value) => ({ ...acc, [value]: Number(acc[value] || 0) + 1 }), {});
+        return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+      };
+      const major = majority(majorVotes);
+      const cents = majority(centsVotes);
+      const priceValue = major && cents ? Number(`${major}.${cents}`) : NaN;
+      if (!validPrice(priceValue)) return null;
+
+      const fullBadge = cropCanvas(badge, { x:0, y:0, width:bw, height:bh }, 5);
+      const fullRead = await ocrThreshold(worker, fullBadge, 180, 6, '');
+      fullBadge.width = 1; fullBadge.height = 1;
+      const unitCrop = cropCanvas(badge, { x:bw * .60, y:bh * .58, width:bw * .36, height:bh * .37 }, 7);
+      const unitReads = [];
+      for (const threshold of [140, 160, 180]) {
+        const read = await ocrThreshold(worker, unitCrop, threshold, 7, 'KGUNIDBDJ0123456789');
+        if (read.text) unitReads.push(read.text);
+      }
+      unitCrop.width = 1; unitCrop.height = 1;
+      unitReads.push(fullRead.text || '');
+      const detectedUnit = unitFromEvidence(unitReads, productText);
+      const packageText = extractPackage(productText) || detectedUnit;
+
+      const currencyCrop = cropCanvas(badge, { x:bw * .04, y:bh * .30, width:bw * .27, height:bh * .39 }, 7);
+      const currencyReads = [];
+      for (const threshold of [180, 220]) {
+        const read = await ocrThreshold(worker, currencyCrop, threshold, 7, 'R$S');
+        if (read.text) currencyReads.push(read.text);
+      }
+      currencyCrop.width = 1; currencyCrop.height = 1;
+      const currencyExplicit = currencyReads.some((value) => /R|\$/i.test(value));
+
+      const majorSupport = majorVotes.filter((value) => value === major).length;
+      const centsSupport = centsVotes.filter((value) => value === cents).length;
+      const priceConfidence = clamp(.78 + Math.min(.12, majorSupport * .03) + Math.min(.09, centsSupport * .018), .78, .99);
+      const nameSupport = nameReads.length;
+      const rawBadgeText = clean([...nameReads, fullRead.text].filter(Boolean).join(' '));
+      return {
+        rawBadgeText,
+        productText,
+        packageText,
+        textPassSupport: Math.max(1, nameSupport),
+        price: {
+          value:Number(priceValue.toFixed(2)),
+          text:`R$ ${Number(priceValue).toFixed(2).replace('.', ',')}`,
+          confidence:Math.round(priceConfidence * 100),
+          currencyExplicit,
+          pattern:'grid-badge-split-digits',
+          passes:Math.min(majorSupport, centsSupport),
+          passNames:['major-digit-consensus','cents-consensus'],
+          conflict:false,
+          conflictValues:[]
+        },
+        confidence:clamp(.76 + Math.min(.15, nameSupport * .04) + Math.min(.08, Math.min(majorSupport, centsSupport) * .02), .76, .99)
+      };
+    } finally {
+      badge.width = 1; badge.height = 1;
+    }
+  }
+
+  function syntheticWordsForLine(text, box, sources) {
+    const parts = clean(text).split(/\s+/).filter(Boolean);
+    if (!parts.length) return [];
+    const count = parts.length;
+    const wordW = Math.max(10, box.width / count);
+    return parts.map((part, index) => ({
+      id: `w-${Math.random().toString(36).slice(2)}`,
+      text: part,
+      confidence: 95,
+      x: box.x + index * wordW,
+      y: box.y,
+      width: Math.max(8, wordW - 2),
+      height: box.height,
+      sources: [...(sources || [])]
+    }));
+  }
+
+  async function analyzeGridImagePage(worker, rasterCanvas, pageNumber, options, onProgress, pageIndex, pageCount) {
+    const grid = detectOfferGrid(rasterCanvas);
+    if (!grid || !grid.cards.length) return null;
+    const cardResults = [];
+    const headerCrop = cropCanvas(rasterCanvas, { x: 0, y: 0, width: rasterCanvas.width, height: Math.max(120, Math.round(grid.offerTop + 40)) }, 1);
+    const headerCanvas = preprocessCanvas(headerCrop, 'mild');
+    const header = await recognizeCanvasQuick(worker, headerCanvas, 6, '');
+    for (let i = 0; i < grid.cards.length; i += 1) {
+      const card = grid.cards[i];
+      if (onProgress) {
+        const base = ((pageIndex) + (i / Math.max(1, grid.cards.length))) / Math.max(1, pageCount);
+        onProgress({ pageNumber: pageIndex + 1, numPages: pageCount, percent: Math.round(8 + base * 80), mode: 'image-grid-card' });
+      }
+      const info = await recognizeGridCard(worker, rasterCanvas, card);
+      if (!info || !info.price || !validPrice(info.price.value)) continue;
+      cardResults.push({ ...card, ...info });
+    }
+    const coverage = cardResults.length / Math.max(1, grid.cards.length);
+    // Se a grade foi detectada, NUNCA voltamos silenciosamente ao OCR global: isso foi a origem
+    // da contaminação por cabeçalho/rodapé. Mesmo uma grade incompleta fica documentada e bloqueada.
+    const structuralComplete = grid.cards.length > 0 && cardResults.length === grid.cards.length;
+
+    const words = [];
+    const lines = [];
+    const prices = [];
+    cardResults.forEach((card, idx) => {
+      const lineH = Math.max(14, Math.round(card.badgeBox.height * .30));
+      const lineY = card.badgeBox.y + Math.max(2, Math.round(card.badgeBox.height * .02));
+      const productBox = { x: card.badgeBox.x + Math.round(card.badgeBox.width * .05), y: lineY, width: Math.round(card.badgeBox.width * .90), height: lineH };
+      const line = { text: card.productText + (card.packageText ? ` ${card.packageText}` : ''), confidence: Math.round(card.confidence * 100), bbox: productBox, wordIds: [], sources: Array.from({ length: Math.max(1, card.textPassSupport) }, (_, n) => `ocr-badge-${n + 1}`) };
+      const lineWords = syntheticWordsForLine(line.text, productBox, line.sources);
+      line.wordIds = lineWords.map((w) => w.id);
+      words.push(...lineWords);
+      lines.push(line);
+      const priceBox = { x: card.badgeBox.x + Math.round(card.badgeBox.width * 0.10), y: card.badgeBox.y + Math.round(card.badgeBox.height * 0.36), width: Math.round(card.badgeBox.width * 0.80), height: Math.round(card.badgeBox.height * 0.52) };
+      prices.push({ value: card.price.value, text: canonicalPriceText(card.price.value), confidence: card.price.confidence, currencyExplicit: true, pattern: card.price.pattern, passes: card.price.passes, passNames: card.price.passNames, conflict: card.price.conflict === true, conflictValues: [...(card.price.conflictValues || [])], bbox: priceBox });
+    });
+    const documentText = clean([header.text, ...cardResults.map((c) => [c.productText, c.packageText, canonicalPriceText(c.price.value)].filter(Boolean).join(' '))].join(' '));
+    const validity = sourceValidity(options, documentText);
+    return {
+      page: {
+        pageNumber,
+        width: rasterCanvas.width,
+        height: rasterCanvas.height,
+        mode: 'image-grid-badge-ocr',
+        text: documentText,
+        metrics: { words: words.length, lines: lines.length, pricesDetected: prices.length, gridDetected: true, gridPattern:grid.pattern || '', gridCards: grid.cards.length, parsedCards: cardResults.length, coverage: Number(coverage.toFixed(3)), structuralComplete },
+        words: words.map(serializableWord),
+        lines,
+        prices,
+        ocrPasses: [{ pass: 'grid-badge', text: documentText, words: words.length, lines: lines.length, prices: prices.length }]
+      },
+      cards: cardResults,
+      validity,
+      documentText,
+      coverage,
+      structuralComplete,
+      expectedCards: grid.cards.length
+    };
+  }
+
+  async function analyzeImages(files, options = {}, onProgress) {
+    const list = [...(files || [])].filter((file) => String(file.type || '').startsWith('image/'));
+    if (!list.length) throw new Error('Selecione pelo menos uma imagem válida.');
+    if (list.length > MAX_IMAGE_FILES) throw new Error(`Selecione no máximo ${MAX_IMAGE_FILES} imagens por análise.`);
+    const Tesseract = await loadTesseract();
+    const hashPromise = sha256Files(list);
+    const rasterPages = [];
+    const worker = await Tesseract.createWorker('por', 1, { logger: () => {} });
+    try {
+      const pages = [];
+      const documentParts = [];
+      let allGridCards = 0;
+      let allParsedGridCards = 0;
+      for (let pageIndex = 0; pageIndex < list.length; pageIndex += 1) {
+        const file = list[pageIndex];
+        if (onProgress) onProgress({ pageNumber: pageIndex + 1, numPages: list.length, percent: Math.round(3 + pageIndex / Math.max(1, list.length) * 70), mode: 'image-prepare' });
+        const raster = await imageFileToCanvas(file);
+        rasterPages.push({ pageNumber: pageIndex + 1, fileName: file.name, canvas: raster.canvas, originalWidth: raster.originalWidth, originalHeight: raster.originalHeight, scale: raster.scale });
+        const gridPage = await analyzeGridImagePage(worker, raster.canvas, pageIndex + 1, options, onProgress, pageIndex, list.length);
+        if (gridPage) {
+          pages.push(gridPage.page);
+          documentParts.push(gridPage.documentText);
+          allGridCards += gridPage.expectedCards;
+          allParsedGridCards += gridPage.cards.length;
+          continue;
+        }
+        const fallback = await analyzeImagesLegacy([file], options, onProgress);
+        const fallbackPage = (fallback?.knowledgeDocument?.pages || [])[0];
+        if (fallbackPage) pages.push(fallbackPage);
+        documentParts.push(clean(fallbackPage?.text || fallback?.knowledgeDocument?.documentText || ''));
+      }
+      const documentText = clean(documentParts.join(' '));
+      const validity = sourceValidity(options, documentText);
+      const hash = await hashPromise;
+      const knowledgeDocument = {
+        schemaVersion: KNOWLEDGE_SCHEMA_VERSION,
+        engineVersion: ENGINE_VERSION,
+        generatedAt: new Date().toISOString(),
+        sourceType: 'image',
+        source: { type: 'image', fileName: list.length === 1 ? list[0].name : `${list.length} imagens`, files: list.map((f) => ({ name: f.name, mimeType: f.type, size: f.size })), sha256: hash, numPages: pages.length },
+        extraction: { mode: allParsedGridCards ? 'image-grid-card-first' : 'image-ocr-multipass', modes: ['image', 'ocr', 'geometry', allParsedGridCards ? 'grid-badge' : 'multipass', 'card-first'], tesseractVersion: TESSERACT_VERSION, geometryAvailable: true },
+        validity,
+        documentText,
+        pages,
+        promotionFacts: []
+      };
+      let result = { fileName: list.length === 1 ? list[0].name : `${list.length} imagens do encarte`, hash, numPages: pages.length, validity, candidates: [], engineVersion: ENGINE_VERSION, pdfjsVersion: '—', extractionMode: allParsedGridCards ? 'image-grid-card-first' : 'image-ocr-multipass', knowledgeSchemaVersion: KNOWLEDGE_SCHEMA_VERSION, knowledgeDocument, knowledgeMetrics: { pages: pages.length, modes: ['image-ocr', 'geometry', allParsedGridCards ? 'grid-badge' : 'multipass', 'card-first'], words: pages.reduce((s, p) => s + (p.words || []).length, 0), lines: pages.reduce((s, p) => s + (p.lines || []).length, 0), prices: pages.reduce((s, p) => s + (p.prices || []).length, 0), gridCards: allGridCards, parsedGridCards: allParsedGridCards, candidates: 0 }, sourceType: 'image', sourceLabel: list.length === 1 ? 'Imagem' : 'Imagens' };
+      if (resolveCardFirst) result = resolveCardFirst(result);
+      result = promoteStrongImageCards(result);
+      const gridIncomplete = allGridCards > 0 && allParsedGridCards !== allGridCards;
+      if (gridIncomplete) {
+        result.candidates = (result.candidates || []).map((candidate) => ({
+          ...candidate,
+          riskFlags: unique([...(candidate.riskFlags || []), 'image_grid_incomplete']),
+          evidence: unique([...(candidate.evidence || []), `grade visual incompleta: ${allParsedGridCards} de ${allGridCards} cards reconstruídos`]),
+          automationSafe:false,
+          structuralSafe:false,
+          confidence:Math.min(Number(candidate.confidence || .85), .89)
+        }));
+        if (result.knowledgeDocument) {
+          result.knowledgeDocument.gridIntegrity = { expectedCards:allGridCards, parsedCards:allParsedGridCards, complete:false, publicationBlocked:true };
+        }
+      } else if (allGridCards > 0 && result.knowledgeDocument) {
+        result.knowledgeDocument.gridIntegrity = { expectedCards:allGridCards, parsedCards:allParsedGridCards, complete:true, publicationBlocked:false };
+      }
+      result.sourceType = 'image';
+      result.sourceLabel = list.length === 1 ? 'Imagem' : 'Imagens';
+      result.knowledgeMetrics = { ...(result.knowledgeMetrics || {}), candidates: (result.candidates || []).length };
+      window.MercadorPDFImporter.lastKnowledgeDocument = result.knowledgeDocument || null;
+      activeSource = { type: 'image', hash, rasterPages, text: '' };
+      if (onProgress) onProgress({ pageNumber: pages.length, numPages: pages.length, percent: 100, mode: 'image-complete' });
+      return result;
+    } finally {
+      await worker.terminate().catch(() => {});
+    }
   }
 
   function upgradeKnowledgeV6(result, sourceType, sourceLabel) {

@@ -1,8 +1,8 @@
 {
   "name": "Mercador IA",
-  "version": "3.0.0",
-  "build": "mercador-ia-v3-multiformat-document-intelligence",
+  "version": "3.2.0",
+  "build": "mercador-ia-v3.2-grid-badge-consensus",
   "date": "2026-08-12",
-  "documentEngine": "6.0.0-multiformat-document-intelligence",
+  "documentEngine": "6.2.0-grid-badge-consensus",
   "knowledgeSchema": "mercador.encarte.knowledge.v6"
 }

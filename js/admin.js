@@ -580,7 +580,8 @@
     text_source_no_geometry: 'texto sem geometria visual — conferência manual obrigatória',
     text_price_without_currency: 'texto contém preço sem marcador R$ confirmado',
     image_price_conflict: 'leituras da imagem discordaram sobre o valor deste card',
-    image_text_single_pass: 'descrição do card apareceu em apenas uma leitura da imagem'
+    image_text_single_pass: 'descrição do card apareceu em apenas uma leitura da imagem',
+    image_grid_incomplete: 'grade visual do encarte não foi reconstruída por completo'
   };
 
   function automationThreshold() {
@@ -594,7 +595,7 @@
     if (candidate.verified && candidate.verificationMode === 'manual') return 'manual';
     const risks = new Set(candidate.riskFlags || []);
     candidate.riskFlags = [...risks];
-    const hardBlock = ['association_disagreement','missing_validity','too_many_prices','ambiguous_price_kind','invalid_price','invalid_previous_price','header_contamination','price_inside_product_text','price_cluster_disagreement','ocr_price_without_currency','ocr_low_price_confidence','ocr_validity_inferred','ocr_price_scale_suspicious','ocr_price_conflict','ocr_low_description_quality','ocr_block_ownership_weak','knowledge_legacy_description_conflict','text_source_no_geometry','text_price_without_currency','image_price_conflict','image_text_single_pass']
+    const hardBlock = ['association_disagreement','missing_validity','too_many_prices','ambiguous_price_kind','invalid_price','invalid_previous_price','header_contamination','price_inside_product_text','price_cluster_disagreement','ocr_price_without_currency','ocr_low_price_confidence','ocr_validity_inferred','ocr_price_scale_suspicious','ocr_price_conflict','ocr_low_description_quality','ocr_block_ownership_weak','knowledge_legacy_description_conflict','text_source_no_geometry','text_price_without_currency','image_price_conflict','image_text_single_pass','image_grid_incomplete']
       .some((x) => risks.has(x));
     const confidence = Number(candidate.confidence || 0);
     const structuralFloor = threshold >= .99 ? .94 : (threshold >= .98 ? .92 : .90);
