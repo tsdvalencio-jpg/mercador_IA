@@ -528,12 +528,13 @@
     const progress = byId('pdfImportProgress');
     if (progress) progress.hidden = true;
     if (byId('pdfImportProgressBar')) byId('pdfImportProgressBar').style.width = '0%';
-    if (byId('pdfImportStatus')) byId('pdfImportStatus').textContent = 'Selecione mercado, unidade e PDF.';
+    if (byId('pdfImportStatus')) byId('pdfImportStatus').textContent = 'Selecione mercado, unidade e PDF/imagem ou cole o texto do encarte.';
     if (byId('pdfCandidatesList')) byId('pdfCandidatesList').innerHTML = '';
     if (byId('pdfImportMeta')) byId('pdfImportMeta').textContent = '';
     if (byId('pdfCandidateSearch')) byId('pdfCandidateSearch').value = '';
     if (byId('pdfCandidateFilter')) byId('pdfCandidateFilter').value = 'all';
     if (byId('pdfImportFile')) byId('pdfImportFile').value = '';
+    if (byId('pdfImportText')) byId('pdfImportText').value = '';
   }
 
   function setPdfProgress(percent, text) {
@@ -575,7 +576,11 @@
     ocr_price_conflict: 'leituras OCR discordaram sobre o preço nesta região',
     ocr_low_description_quality: 'descrição visual não tem qualidade suficiente para publicação',
     ocr_block_ownership_weak: 'bloco de produto não pertence com segurança a este preço',
-    knowledge_legacy_description_conflict: 'JSON de conhecimento e validador independente discordaram sobre o produto'
+    knowledge_legacy_description_conflict: 'JSON de conhecimento e validador independente discordaram sobre o produto',
+    text_source_no_geometry: 'texto sem geometria visual — conferência manual obrigatória',
+    text_price_without_currency: 'texto contém preço sem marcador R$ confirmado',
+    image_price_conflict: 'leituras da imagem discordaram sobre o valor deste card',
+    image_text_single_pass: 'descrição do card apareceu em apenas uma leitura da imagem'
   };
 
   function automationThreshold() {
@@ -589,7 +594,7 @@
     if (candidate.verified && candidate.verificationMode === 'manual') return 'manual';
     const risks = new Set(candidate.riskFlags || []);
     candidate.riskFlags = [...risks];
-    const hardBlock = ['association_disagreement','missing_validity','too_many_prices','ambiguous_price_kind','invalid_price','invalid_previous_price','header_contamination','price_inside_product_text','price_cluster_disagreement','ocr_price_without_currency','ocr_low_price_confidence','ocr_validity_inferred','ocr_price_scale_suspicious','ocr_price_conflict','ocr_low_description_quality','ocr_block_ownership_weak','knowledge_legacy_description_conflict']
+    const hardBlock = ['association_disagreement','missing_validity','too_many_prices','ambiguous_price_kind','invalid_price','invalid_previous_price','header_contamination','price_inside_product_text','price_cluster_disagreement','ocr_price_without_currency','ocr_low_price_confidence','ocr_validity_inferred','ocr_price_scale_suspicious','ocr_price_conflict','ocr_low_description_quality','ocr_block_ownership_weak','knowledge_legacy_description_conflict','text_source_no_geometry','text_price_without_currency','image_price_conflict','image_text_single_pass']
       .some((x) => risks.has(x));
     const confidence = Number(candidate.confidence || 0);
     const structuralFloor = threshold >= .99 ? .94 : (threshold >= .98 ? .92 : .90);
@@ -636,7 +641,8 @@
     const published = candidates.filter((x) => x.published).length;
     const ignored = candidates.filter((x) => x.ignored).length;
     byId('pdfKpiCandidates').textContent = candidates.length;
-    byId('pdfKpiPagesFoot').textContent = `${imp.result.numPages || 0} página${imp.result.numPages === 1 ? '' : 's'}`;
+    const sourceTypeLabel = imp.result.sourceLabel || (imp.result.sourceType === 'image' ? 'Imagem' : (imp.result.sourceType === 'text' ? 'Texto/OCR' : 'PDF'));
+    byId('pdfKpiPagesFoot').textContent = `${imp.result.numPages || 0} página${imp.result.numPages === 1 ? '' : 's'} · ${sourceTypeLabel}`;
     byId('pdfKpiAuto').textContent = autoPending;
     byId('pdfKpiReview').textContent = reviewPending;
     byId('pdfKpiPublished').textContent = published;
@@ -648,7 +654,8 @@
     const thresholdPct = Math.round((imp.threshold || .98) * 100);
     const km = imp.result.knowledgeMetrics || null;
     const knowledgeInfo = km ? `<br><strong>Arquivo de conhecimento:</strong> ${M.escapeHtml(imp.result.knowledgeSchemaVersion || 'mercador.encarte.knowledge.v1')} · ${km.words || 0} palavras · ${km.lines || 0} linhas · ${km.prices || 0} fatos de preço · modos ${M.escapeHtml((km.modes || []).join(' + ') || '—')}` : '';
-    byId('pdfImportMeta').innerHTML = `<div class="pdf-automation-summary">Arquivo: <strong>${M.escapeHtml(imp.result.fileName)}</strong> · ${imp.result.numPages} página${imp.result.numPages === 1 ? '' : 's'} · ${M.escapeHtml(validityText)} · SHA-256 ${M.escapeHtml((imp.result.hash || '').slice(0,16))}…<br><strong>${autoPending}</strong> automáticos prontos · <strong>${manualReady}</strong> revisados prontos · <strong>${reviewPending}</strong> pendentes de revisão · <strong>${ignored}</strong> excluídos desta importação · limite automático <strong>${thresholdPct}%</strong> · motor ${M.escapeHtml(imp.result.engineVersion || '2.2.0')} / PDF.js ${M.escapeHtml(imp.result.pdfjsVersion || '')} · <strong>JSON de conhecimento</strong>${knowledgeInfo}</div>`;
+    const engineDetail = imp.result.sourceType === 'pdf' ? ` / PDF.js ${M.escapeHtml(imp.result.pdfjsVersion || '')}` : '';
+    byId('pdfImportMeta').innerHTML = `<div class="pdf-automation-summary">Fonte: <strong>${M.escapeHtml(sourceTypeLabel)}</strong> · Arquivo: <strong>${M.escapeHtml(imp.result.fileName)}</strong> · ${imp.result.numPages} página${imp.result.numPages === 1 ? '' : 's'} · ${M.escapeHtml(validityText)} · SHA-256 ${M.escapeHtml((imp.result.hash || '').slice(0,16))}…<br><strong>${autoPending}</strong> automáticos prontos · <strong>${manualReady}</strong> revisados prontos · <strong>${reviewPending}</strong> pendentes de revisão · <strong>${ignored}</strong> excluídos desta importação · limite automático <strong>${thresholdPct}%</strong> · motor ${M.escapeHtml(imp.result.engineVersion || 'desconhecido')}${engineDetail} · <strong>JSON de conhecimento</strong>${knowledgeInfo}</div>`;
 
     const q = M.normalizeText(byId('pdfCandidateSearch')?.value || '');
     const filter = byId('pdfCandidateFilter')?.value || 'all';
@@ -744,36 +751,44 @@
   async function analyzePdfImport(event) {
     event.preventDefault();
     const importer = window.MercadorPDFImporter;
-    if (!importer) { M.toast('Módulo de PDF não carregado. Verifique a conexão e recarregue o painel.', 'error', 7000); return; }
+    if (!importer) { M.toast('Módulo de encartes não carregado. Verifique a conexão e recarregue o painel.', 'error', 7000); return; }
     const marketId = byId('pdfImportMarketId').value;
     const unitId = byId('pdfImportUnitId').value;
-    const file = byId('pdfImportFile').files?.[0];
+    const files = [...(byId('pdfImportFile').files || [])];
+    const pastedText = byId('pdfImportText')?.value?.trim() || '';
     const unit = getUnit(unitId);
     if (!marketId || !unitId || !unit || unit.marketId !== marketId) { M.toast('Selecione um mercado e uma unidade válidos.', 'warning'); return; }
-    if (!file) { M.toast('Selecione o PDF oficial do encarte.', 'warning'); return; }
+    if (!files.length && !pastedText) { M.toast('Selecione um PDF/imagem ou cole o texto do encarte.', 'warning'); return; }
+    if (files.length && pastedText) { M.toast('Use um tipo de entrada por vez: arquivo/imagens OU texto colado.', 'warning'); return; }
 
     const btn = byId('pdfImportAnalyzeBtn');
     M.setBusy(btn, true, 'Analisando e conferindo...');
-    setPdfProgress(2, 'Carregando o motor automático...');
+    setPdfProgress(2, 'Carregando a inteligência documental...');
     try {
       const lowerPriceIsClub = byId('pdfImportLowerIsClub').checked;
       const clubName = byId('pdfImportClubName').value.trim();
       const threshold = automationThreshold();
       const suppliedStartAt = M.toTimestampFromLocalInput(byId('pdfImportStartAt').value);
       const suppliedEndAt = M.toTimestampFromLocalInput(byId('pdfImportEndAt').value);
-      const result = await importer.analyzeFile(file, { lowerPriceIsClub, clubName, suppliedStartAt, suppliedEndAt }, (progress) => {
-        setPdfProgress(progress.percent, `Conferindo página ${progress.pageNumber} de ${progress.numPages}...`);
-      });
-      result.engineVersion = importer.ENGINE_VERSION || '2.2.0';
+      const options = { lowerPriceIsClub, clubName, suppliedStartAt, suppliedEndAt };
+      const progressCallback = (progress) => {
+        const sourceLabel = progress.mode && String(progress.mode).startsWith('image') ? 'imagem' : (progress.mode && String(progress.mode).startsWith('text') ? 'texto' : 'página');
+        setPdfProgress(progress.percent, `Conferindo ${sourceLabel} ${progress.pageNumber} de ${progress.numPages}...`);
+      };
+      const result = typeof importer.analyzeSource === 'function'
+        ? await importer.analyzeSource({ files, text:pastedText }, options, progressCallback)
+        : await importer.analyzeFile(files[0], options, progressCallback);
+      if (!result.engineVersion) result.engineVersion = importer.ENGINE_VERSION || '2.2.0';
       if (result.validity?.startAt && !byId('pdfImportStartAt').value) byId('pdfImportStartAt').value = M.toLocalDateTimeInput(result.validity.startAt);
       if (result.validity?.endAt && !byId('pdfImportEndAt').value) byId('pdfImportEndAt').value = M.toLocalDateTimeInput(result.validity.endAt);
 
       state.pdfImport = {
         result,
-        candidates: result.candidates.map((x) => ({ ...x, detectedProductName: x.productName })),
+        candidates: (result.candidates || []).map((x) => ({ ...x, detectedProductName: x.detectedProductName || x.productName })),
         marketId,
         unitId,
         sourceUrl: byId('pdfImportSourceUrl').value.trim(),
+        sourceType: result.sourceType || 'pdf',
         lowerPriceIsClub,
         clubName,
         threshold
@@ -781,11 +796,11 @@
       refreshPdfClassifications();
       const autoCount = state.pdfImport.candidates.filter((x) => x.automationDecision === 'auto').length;
       const reviewCount = state.pdfImport.candidates.filter((x) => x.automationDecision !== 'auto').length;
-      setPdfProgress(100, `${result.candidates.length} ofertas detectadas: ${autoCount} seguras para automação e ${reviewCount} exceções.`);
+      setPdfProgress(100, `${result.candidates?.length || 0} ofertas detectadas: ${autoCount} seguras para automação e ${reviewCount} exceções.`);
       renderPdfImport();
-      await audit('pdf_import_analyzed_v2', 'pdf_import', (result.hash || '').slice(0,20), { fileName:result.fileName, pages:result.numPages, candidates:result.candidates.length, auto:autoCount, review:reviewCount, threshold, marketId, unitId, engineVersion:result.engineVersion, knowledgeSchemaVersion:result.knowledgeSchemaVersion || '', knowledgeMetrics:result.knowledgeMetrics || null });
-      if (!result.candidates.length) {
-        M.toast('O PDF foi lido, mas nenhum bloco de produto/preço foi associado com segurança.', 'warning', 8000);
+      await audit('encarte_import_analyzed_v3', 'encarte_import', (result.hash || '').slice(0,20), { sourceType:result.sourceType || 'pdf', fileName:result.fileName, pages:result.numPages, candidates:result.candidates?.length || 0, auto:autoCount, review:reviewCount, threshold, marketId, unitId, engineVersion:result.engineVersion, knowledgeSchemaVersion:result.knowledgeSchemaVersion || '', knowledgeMetrics:result.knowledgeMetrics || null });
+      if (!result.candidates?.length) {
+        M.toast('A fonte foi lida, mas nenhuma oferta pôde ser reconstruída com segurança.', 'warning', 8000);
       } else if (byId('pdfAutoPublish')?.checked && autoCount) {
         await publishAutomaticPdfCandidates(true);
         const remaining = state.pdfImport.candidates.filter((x) => !x.published && !x.ignored && x.automationDecision !== 'auto').length;
@@ -798,7 +813,7 @@
       console.error(error);
       state.pdfImport = null;
       byId('pdfImportWorkspace').hidden = true;
-      setPdfProgress(0, error.message || 'Falha ao analisar o PDF.');
+      setPdfProgress(0, error.message || 'Falha ao analisar o encarte.');
       M.toast(error.message || 'Falha ao analisar o encarte.', 'error', 8000);
     } finally {
       M.setBusy(btn, false);
@@ -826,8 +841,9 @@
     f.elements.startAt.value = M.toLocalDateTimeInput(candidate.startAt || globalStart || imp.result.validity?.startAt);
     f.elements.endAt.value = M.toLocalDateTimeInput(candidate.endAt || globalEnd || imp.result.validity?.endAt);
     f.elements.verified.checked = candidate.verified === true;
-    byId('pdfReviewSource').textContent = `${imp.result.fileName} · página ${candidate.pageNumber} · SHA-256 ${(imp.result.hash || '').slice(0,16)}…`;
-    byId('pdfDetectedPrices').textContent = `Valores detectados nesta região: ${(candidate.detectedPrices || [candidate.price]).map(M.formatCurrency).join(' · ')}. A detecção automática é apenas uma sugestão; confira a imagem acima.`;
+    const reviewSourceLabel = imp.result.sourceLabel || (imp.result.sourceType === 'image' ? 'Imagem' : (imp.result.sourceType === 'text' ? 'Texto/OCR' : 'PDF'));
+    byId('pdfReviewSource').textContent = `${reviewSourceLabel} · ${imp.result.fileName} · página ${candidate.pageNumber} · SHA-256 ${(imp.result.hash || '').slice(0,16)}…`;
+    byId('pdfDetectedPrices').textContent = `Valores detectados nesta região: ${(candidate.detectedPrices || [candidate.price]).map(M.formatCurrency).join(' · ')}. A detecção automática é apenas uma sugestão; confira a evidência de origem acima.`;
     M.openModal('pdfReviewModal', { trigger });
     const canvas = byId('pdfReviewCanvas');
     const ctx = canvas.getContext('2d');
@@ -1006,7 +1022,9 @@
         throw new Error(`A oferta "${candidate.productName}" não passou nas travas obrigatórias de publicação.`);
       }
       const key = db.ref('promotions').push().key;
-      const sourceReference = `PDF ${imp.result.fileName} · pág. ${candidate.pageNumber} · SHA256 ${(imp.result.hash || '').slice(0,16)}${imp.sourceUrl ? ' · fonte oficial informada' : ''}`.slice(0,250);
+      const sourceDocumentType = imp.result.sourceType || imp.sourceType || 'pdf';
+      const sourceKindLabel = sourceDocumentType === 'image' ? 'IMAGEM' : (sourceDocumentType === 'text' ? 'TEXTO/OCR' : 'PDF');
+      const sourceReference = `${sourceKindLabel} ${imp.result.fileName} · pág. ${candidate.pageNumber} · SHA256 ${(imp.result.hash || '').slice(0,16)}${imp.sourceUrl ? ' · fonte oficial informada' : ''}`.slice(0,250);
       const promoRecord = {
         marketId: imp.marketId,
         unitId: imp.unitId,
@@ -1019,6 +1037,7 @@
         startAt,
         endAt,
         sourceType: 'encarte',
+        sourceDocumentType,
         sourceReference,
         sourceUrl: imp.sourceUrl || '',
         sourceFileName: imp.result.fileName,
@@ -1060,6 +1079,7 @@
     if (created.length || duplicates) {
       await audit(mode === 'automatic' ? 'pdf_import_auto_published' : 'pdf_import_manual_published', 'pdf_import', (imp.result.hash || '').slice(0,20), {
         fileName: imp.result.fileName,
+        sourceType: imp.result.sourceType || imp.sourceType || 'pdf',
         created: created.length,
         duplicates,
         marketId: imp.marketId,

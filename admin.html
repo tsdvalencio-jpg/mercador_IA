@@ -87,21 +87,22 @@
           <div>
             <div class="eyebrow">Automação supervisionada</div>
             <h1>Motor automático de encartes</h1>
-            <p class="muted">Primeiro transforma cada PDF em um JSON de conhecimento com páginas, palavras, coordenadas, preços, validade e evidências. Depois extrai as promoções desse documento estruturado, usando texto nativo, OCR ou ambos, sem perder o motor anterior como validador independente.</p>
+            <p class="muted">Recebe PDF, imagens (JPG/PNG/WebP) ou texto/OCR e transforma tudo no mesmo JSON de conhecimento. A promoção só nasce depois da reconstrução documental dos cards e das travas de validação.</p>
           </div>
         </div>
 
         <div class="card card-pad pdf-import-safety">
           <strong>Automação com trava de segurança</strong>
-          <p class="muted" style="margin:8px 0 0">Ofertas sem conflito, com validade identificada e confiança acima do limite escolhido podem ser publicadas automaticamente. Qualquer ambiguidade de preço, associação ou validade cai em <strong>Revisão</strong>. A origem, página, hash, evidências e modo de verificação ficam gravados.</p>
+          <p class="muted" style="margin:8px 0 0">PDF e imagens mantêm a geometria do documento para reconstruir cada card. Texto colado é aceito, mas nunca é publicado automaticamente porque não possui coordenadas visuais. Qualquer conflito de produto, preço, unidade ou validade cai em <strong>Revisão</strong>.</p>
         </div>
 
         <form id="pdfImportForm" class="card card-pad" style="margin-top:16px">
           <div class="form-grid">
             <div class="field"><label>Mercado</label><select class="select" id="pdfImportMarketId" required></select></div>
             <div class="field"><label>Unidade</label><select class="select" id="pdfImportUnitId" required></select></div>
-            <div class="field full"><label>Arquivo PDF oficial</label><input class="input" id="pdfImportFile" type="file" accept="application/pdf,.pdf" required><div class="field-help">O PDF é analisado no navegador do administrador. O arquivo completo não é enviado ao Realtime Database.</div></div>
-            <div class="field full"><label>URL oficial do encarte (recomendado)</label><input class="input" id="pdfImportSourceUrl" type="url" placeholder="https://site-do-mercado/.../encarte.pdf"><div class="field-help">Fica gravada na promoção como referência de origem.</div></div>
+            <div class="field full"><label>Arquivo oficial — PDF ou imagem</label><input class="input" id="pdfImportFile" type="file" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,text/plain,.txt" multiple><div class="field-help">Use 1 PDF, 1 arquivo TXT ou uma/múltiplas imagens do mesmo encarte. A leitura acontece no navegador; o arquivo original não é gravado no Realtime Database.</div></div>
+            <div class="field full"><label>Ou cole o texto/OCR do encarte</label><textarea class="textarea" id="pdfImportText" rows="7" placeholder="Cole aqui o texto extraído do encarte quando você não tiver o PDF/imagem..."></textarea><div class="field-help">Texto sem geometria serve para reconstrução supervisionada. Por segurança, essas ofertas sempre exigem conferência manual antes de publicar.</div></div>
+            <div class="field full"><label>URL oficial do encarte (opcional/recomendado)</label><input class="input" id="pdfImportSourceUrl" type="url" placeholder="https://site-do-mercado/.../encarte"><div class="field-help">Fica gravada na promoção como referência de origem.</div></div>
             <div class="field"><label>Início da validade</label><input class="input" id="pdfImportStartAt" type="datetime-local"></div>
             <div class="field"><label>Fim da validade</label><input class="input" id="pdfImportEndAt" type="datetime-local"></div>
             <div class="field"><label>Programa/Clube (opcional)</label><input class="input" id="pdfImportClubName" placeholder="Ex.: Clube Compre Mix"></div>
@@ -114,7 +115,7 @@
             <button class="btn btn-secondary" id="pdfImportResetBtn" type="button">Limpar análise</button>
           </div>
           <div id="pdfImportProgress" class="pdf-import-progress" hidden><div id="pdfImportProgressBar"></div></div>
-          <div class="small muted" id="pdfImportStatus" style="margin-top:10px">Selecione mercado, unidade e PDF.</div>
+          <div class="small muted" id="pdfImportStatus" style="margin-top:10px">Selecione mercado, unidade e PDF/imagem ou cole o texto do encarte.</div>
         </form>
 
         <div id="pdfImportWorkspace" hidden style="margin-top:16px">
@@ -164,7 +165,7 @@
   </main>
 
   <nav class="admin-mobile-nav" aria-label="Administração mobile">
-    <button class="active" data-section="dashboard">▦<br>Início</button><button data-section="users">👥<br>Usuários</button><button data-section="markets">🏪<br>Mercados</button><button data-section="units">📍<br>Unidades</button><button data-section="promotions">🔥<br>Ofertas</button><button data-section="pdfimport">📄<br>PDF</button><button data-section="inbox">📥<br>Inbox</button><button data-section="audit">🛡️<br>Auditoria</button>
+    <button class="active" data-section="dashboard">▦<br>Início</button><button data-section="users">👥<br>Usuários</button><button data-section="markets">🏪<br>Mercados</button><button data-section="units">📍<br>Unidades</button><button data-section="promotions">🔥<br>Ofertas</button><button data-section="pdfimport">📄<br>Encarte</button><button data-section="inbox">📥<br>Inbox</button><button data-section="audit">🛡️<br>Auditoria</button>
   </nav>
 
   <div id="userModal" class="modal" hidden><div class="modal-panel"><div class="modal-head"><div><strong>Novo usuário</strong><div class="small muted">Conta criada pelo administrador já entra liberada. Cadastros feitos pelo link público ficam pendentes.</div></div><button type="button" class="icon-btn" data-close-modal="userModal">✕</button></div><form id="userForm"><div class="modal-body"><div class="form-grid"><div class="field"><label>Nome</label><input class="input" name="name" required maxlength="100"></div><div class="field"><label>E-mail de login</label><input class="input" name="email" type="email" required></div><div class="field"><label>WhatsApp / celular</label><input class="input" name="phone" inputmode="tel" maxlength="24" placeholder="(17) 99999-9999"></div><div class="field"><label>E-mail de contato</label><input class="input" name="contactEmail" type="email" placeholder="Se diferente do login"></div><div class="field"><label>Senha inicial</label><input class="input" name="password" type="password" minlength="6" required></div><div class="field"><label>Perfil</label><select class="select" name="role" id="newUserRole"><option value="user">Usuário consumidor</option><option value="admin">Administrador</option></select></div><div class="field full"><label>Observação interna</label><textarea class="textarea" name="notes" maxlength="500" placeholder="Informação visível somente na administração"></textarea></div></div><p class="field-help" style="margin-top:12px">A senha nunca é salva no Realtime Database.</p></div><div class="modal-foot"><button class="btn btn-secondary" type="button" data-close-modal="userModal">Cancelar</button><button class="btn btn-primary" id="userSubmit" type="submit">Criar usuário</button></div></form></div></div>
@@ -230,7 +231,7 @@
     </div>
   </div>
 
-  <footer class="footer"><div class="shell">Powered by <strong>thIAguinho Soluções Digitais</strong> · Mercador IA V2.8.0</div></footer>
+  <footer class="footer"><div class="shell">Powered by <strong>thIAguinho Soluções Digitais</strong> · Mercador IA V3.0.0</div></footer>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
@@ -239,9 +240,11 @@
   <script src="./js/utils.js?v=2.8.0"></script>
   <script src="./js/auth.js?v=2.8.0"></script>
   <script src="./js/smart-matcher.js?v=2.8.0"></script>
-  <script src="./js/pdf-encarte-importer.js?v=2.8.0"></script>
-  <script src="./js/pdf-encarte-ocr-fallback.js?v=2.8.10"></script>
-  <script src="./js/admin.js?v=2.8.10"></script>
-  <script src="./js/pwa.js?v=2.8.0"></script>
+  <script src="./js/pdf-encarte-importer.js?v=3.0.0"></script>
+  <script src="./js/pdf-encarte-ocr-fallback.js?v=3.0.0"></script>
+  <script src="./js/pdf-encarte-card-resolver.js?v=3.0.0"></script>
+  <script src="./js/document-encarte-importer.js?v=3.0.0"></script>
+  <script src="./js/admin.js?v=3.0.0"></script>
+  <script src="./js/pwa.js?v=3.0.0"></script>
 </body>
 </html>

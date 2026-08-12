@@ -1,4 +1,4 @@
-const CACHE = 'mercador-ia-shell-v2.9.0-card-first';
+const CACHE = 'mercador-ia-shell-v3.0.0-multiformat';
 
 // Shell enxuto do consumidor. O painel Admin/PDF e o Card Resolver são carregados
 // somente quando um administrador realmente os acessa — não pesam no PWA do usuário.

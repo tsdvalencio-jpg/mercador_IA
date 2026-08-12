@@ -412,6 +412,9 @@
         const conditionText = splitConditions(cellLines);
         const rawText = unique(cellLines.map((line) => clean(line.text)).filter(Boolean)).join(' ');
         const useful = cellLines.filter((line) => lineTextQuality(line.text) > 0);
+        const textPassSupport = hypothesis.lines.length
+          ? Math.max(1, Math.round(hypothesis.lines.reduce((sum, line) => sum + Math.max(1, (line.sources || []).length), 0) / hypothesis.lines.length))
+          : 0;
         const cardBoxRaw = unionBoxes([price.__box, ...useful.map((line) => line.__box)]) || price.__box;
         const cardConfidence = clamp(
           .35
@@ -432,6 +435,8 @@
           currencyExplicit: price.currencyExplicit === true,
           pricePattern: clean(price.pattern),
           pricePasses: Math.max(1, Math.round(numberOr(price.passes, 1))),
+          priceConflict: price.conflict === true,
+          priceConflictValues: [...(price.conflictValues || [])].map(Number).filter(Number.isFinite),
           priceBoxRaw: price.__box,
           priceBox: toBaseBox(page, price.__box, extent),
           cardBoxRaw,
@@ -444,6 +449,7 @@
           packageText: extractPackage(hypothesis.text || rawText),
           conditions: conditionText,
           lineIds: hypothesis.lines.map((line) => clean(line.text)),
+          textPassSupport,
           confidence: cardConfidence,
           cell: {
             left: clamp((cell.left - extent.minX) / Math.max(1, extent.width), 0, 1),
@@ -719,6 +725,8 @@
         confidence: card.priceConfidence,
         currencyExplicit: card.currencyExplicit,
         passes: card.pricePasses,
+        conflict: card.priceConflict === true,
+        conflictValues: [...(card.priceConflictValues || [])],
         bbox: card.priceBox
       },
       rawText: card.rawText,
@@ -726,6 +734,7 @@
       packageText: card.packageText,
       conditions: card.conditions,
       confidence: card.confidence,
+      textPassSupport: Number(card.textPassSupport || 0),
       cell: card.cell
     };
   }

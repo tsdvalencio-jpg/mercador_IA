@@ -1,8 +1,8 @@
 {
   "name": "Mercador IA",
-  "version": "2.9.0",
-  "build": "mercador-ia-v2.9-card-first-document-resolution",
-  "date": "2026-08-11",
-  "documentEngine": "5.0.0-card-first",
-  "knowledgeSchema": "mercador.encarte.knowledge.v5"
+  "version": "3.0.0",
+  "build": "mercador-ia-v3-multiformat-document-intelligence",
+  "date": "2026-08-12",
+  "documentEngine": "6.0.0-multiformat-document-intelligence",
+  "knowledgeSchema": "mercador.encarte.knowledge.v6"
 }
