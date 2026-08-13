@@ -1,4 +1,4 @@
-const CACHE = 'mercador-ia-shell-v3.2.0-grid-consensus';
+const CACHE = 'mercador-ia-shell-v3.3.0-professional-ai';
 
 // Shell enxuto do consumidor. O painel Admin/PDF e o Card Resolver são carregados
 // somente quando um administrador realmente os acessa — não pesam no PWA do usuário.
